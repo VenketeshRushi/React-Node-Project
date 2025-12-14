@@ -1,0 +1,8 @@
+# Ignore everything outside src
+*
+
+# Only format src folder
+!src/**
+
+# But ignore ui components inside src
+src/components/ui/**

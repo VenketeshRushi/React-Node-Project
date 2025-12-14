@@ -1,0 +1,177 @@
+import { useState, useEffect } from "react";
+import {
+  BadgeCheck,
+  Bell,
+  ChevronsUpDown,
+  CreditCard,
+  LogOut,
+  Puzzle,
+  Sparkles,
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { getCookies } from "@/utils/ext";
+import { Link } from "react-router-dom";
+import { useAuthStore } from "@/stores/auth.store";
+
+type User = {
+  name: string;
+  email: string;
+  avatar: string;
+};
+
+export function NavUser() {
+  const { isMobile } = useSidebar();
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const logout = useAuthStore(state => state.logout);
+
+  useEffect(() => {
+    setTimeout(() => {
+      const cookies = getCookies(["user"]);
+      if (cookies.user) {
+        try {
+          const parsed = JSON.parse(cookies.user);
+          setUser({
+            name: parsed.name,
+            email: parsed.email,
+            avatar: parsed.avatar_url,
+          });
+        } catch (err) {
+          console.error("Error parsing user cookie", err);
+        }
+      }
+      setIsLoading(false);
+    }, 0);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton size='lg' disabled>
+            <Avatar className='h-8 w-8 rounded-lg'>
+              <AvatarFallback>G</AvatarFallback>
+            </Avatar>
+            <div className='ml-2 grid flex-1 text-left text-sm leading-tight'>
+              <span className='truncate font-medium'>Guest</span>
+              <span className='truncate text-xs'></span>
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
+  }
+
+  const displayUser = user ?? {
+    name: "Guest",
+    email: "guest@example.com",
+    avatar: "/avatar.png",
+  };
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size='lg'
+              className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
+            >
+              <Avatar className='h-8 w-8 rounded-lg'>
+                <AvatarImage src={displayUser.avatar} alt={displayUser.name} />
+                <AvatarFallback>{displayUser.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div className='grid flex-1 text-left text-sm leading-tight'>
+                <span className='truncate font-medium'>{displayUser.name}</span>
+                <span className='truncate text-xs'>{displayUser.email}</span>
+              </div>
+              <ChevronsUpDown className='ml-auto size-4' />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            className='min-w-56 rounded-lg'
+            side={isMobile ? "bottom" : "right"}
+            align='end'
+            sideOffset={4}
+          >
+            <DropdownMenuLabel className='p-0 font-normal'>
+              <div className='flex items-center gap-2 px-1 py-1.5 text-left text-sm'>
+                <Avatar className='h-8 w-8 rounded-lg'>
+                  <AvatarImage
+                    src={displayUser.avatar}
+                    alt={displayUser.name}
+                  />
+                  <AvatarFallback>{displayUser.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div className='grid flex-1 text-left text-sm leading-tight'>
+                  <span className='truncate font-medium'>
+                    {displayUser.name}
+                  </span>
+                  <span className='truncate text-xs'>{displayUser.email}</span>
+                </div>
+              </div>
+            </DropdownMenuLabel>
+
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem asChild className='cursor-pointer'>
+                <Link to='/pricing'>
+                  <Sparkles /> Upgrade to Pro
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem asChild className='cursor-pointer'>
+                <Link to='/account'>
+                  <BadgeCheck /> Account
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className='cursor-pointer'>
+                <Link to='/notifications'>
+                  <Bell /> Notifications
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className='cursor-pointer'>
+                <Link to='/integrations'>
+                  <Puzzle /> Integrations
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className='cursor-pointer'>
+                <Link to='/billing'>
+                  <CreditCard /> Billing
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className='cursor-pointer' onClick={handleLogout}>
+              <LogOut /> Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}

@@ -1,0 +1,68 @@
+services:
+  redis:
+    image: ${REDIS_IMAGE}
+    container_name: ${REDIS_CONTAINER_NAME}
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory ${REDIS_MAX_MEMORY}
+      --maxmemory-policy ${REDIS_MEMORY_POLICY}
+      --appendonly ${REDIS_APPEND_ONLY}
+      --save ${REDIS_SAVE_1}
+      --save ${REDIS_SAVE_2}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: ${REDIS_HEALTHCHECK_INTERVAL}
+      timeout: ${REDIS_HEALTHCHECK_TIMEOUT}
+      retries: ${REDIS_HEALTHCHECK_RETRIES}
+      start_period: ${REDIS_HEALTHCHECK_START_PERIOD}
+    volumes:
+      - ${REDIS_VOLUME_NAME}:/data
+    logging:
+      driver: ${LOG_DRIVER}
+      options:
+        max-size: ${LOG_MAX_SIZE}
+        max-file: ${LOG_MAX_FILE}
+
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    container_name: ${POSTGRES_CONTAINER_NAME}
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      PGDATA: ${POSTGRES_PGDATA}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER}"]
+      interval: ${POSTGRES_HEALTHCHECK_INTERVAL}
+      timeout: ${POSTGRES_HEALTHCHECK_TIMEOUT}
+      retries: ${POSTGRES_HEALTHCHECK_RETRIES}
+      start_period: ${POSTGRES_HEALTHCHECK_START_PERIOD}
+    volumes:
+      - ${POSTGRES_VOLUME_NAME}:/var/lib/postgresql/data
+      - ${POSTGRES_BACKUP_PATH}:/backup
+      - ${POSTGRES_INIT_SCRIPT}:/docker-entrypoint-initdb.d/init.sh:ro
+    shm_size: ${POSTGRES_SHM_SIZE}
+    logging:
+      driver: ${LOG_DRIVER}
+      options:
+        max-size: ${LOG_MAX_SIZE}
+        max-file: ${LOG_MAX_FILE}
+
+
+volumes:
+  redis-data:
+    driver: local
+    name: ${REDIS_VOLUME_NAME}
+  postgres-data:
+    driver: local
+    name: ${POSTGRES_VOLUME_NAME}

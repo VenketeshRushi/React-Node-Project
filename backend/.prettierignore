@@ -1,0 +1,43 @@
+# Node & Dependencies
+node_modules
+.pnpm-store
+.cache
+
+# Build Outputs
+dist
+build
+out
+coverage
+.temp
+.temp/**
+
+# Logs & Lock Files
+*.log
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Environment & System Files
+.env
+.env.*
+.DS_Store
+Thumbs.db
+
+# Generated / Minified Files
+*.min.js
+*.min.css
+*.map
+
+# Docker & Dev Artifacts
+docker-dev/**
+!docker-dev/*.yml
+docker/**
+!docker/*.yml
+
+# Database / ORM Generated Files
+server.ts
+drizzle.config.ts
+
+# IDE & Editor Files
+.vscode
+.idea

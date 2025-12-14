@@ -1,0 +1,33 @@
+CREATE TYPE "public"."login_method" AS ENUM('email_password', 'google_oauth', 'facebook_oauth');--> statement-breakpoint
+CREATE TYPE "public"."user_role" AS ENUM('user', 'admin', 'superadmin');--> statement-breakpoint
+CREATE TABLE "users" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"email" varchar(255) NOT NULL,
+	"password" varchar(255),
+	"mobile_no" varchar(15),
+	"google_id" varchar(100),
+	"facebook_id" varchar(100),
+	"login_method" "login_method" DEFAULT 'google_oauth' NOT NULL,
+	"role" "user_role" DEFAULT 'user' NOT NULL,
+	"onboarding" boolean DEFAULT true NOT NULL,
+	"profession" varchar(100),
+	"company" varchar(150),
+	"address" varchar(255),
+	"city" varchar(100),
+	"state" varchar(100),
+	"country" varchar(100),
+	"timezone" varchar(50) DEFAULT 'UTC',
+	"language" varchar(10) DEFAULT 'en',
+	"avatar_url" varchar(500),
+	"is_active" boolean DEFAULT false NOT NULL,
+	"is_banned" boolean DEFAULT false NOT NULL,
+	"deleted_at" timestamp with time zone,
+	"deleted_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "users_email_unique" UNIQUE("email"),
+	CONSTRAINT "users_mobile_no_unique" UNIQUE("mobile_no"),
+	CONSTRAINT "users_google_id_unique" UNIQUE("google_id"),
+	CONSTRAINT "users_facebook_id_unique" UNIQUE("facebook_id")
+);
