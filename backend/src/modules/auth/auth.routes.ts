@@ -1,18 +1,18 @@
 import { Router } from 'express';
-import { rateLimiter } from '@/middlewares/security/rateLimiter.js';
 import {
   googleAuthCodeController,
-  initPKCEFlow,
+  logoutController,
 } from '@/modules/auth/auth.controller.js';
+import { rateLimiter } from '@/middlewares/security/rateLimiter.js';
 
 const authRouter: Router = Router();
-
-authRouter.post('/google/pkce/init', rateLimiter('auth'), initPKCEFlow);
 
 authRouter.post(
   '/google/callback',
   rateLimiter('auth'),
   googleAuthCodeController
 );
+
+authRouter.post('/logout', logoutController);
 
 export default authRouter;

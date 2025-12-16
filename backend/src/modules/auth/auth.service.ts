@@ -46,9 +46,6 @@ function getProviderFields(provider: OAuthProvider) {
   } as const;
 }
 
-/**
- * Handle OAuth login/registration
- */
 export async function handleOAuthLogin(
   provider: OAuthProvider,
   profile: any,

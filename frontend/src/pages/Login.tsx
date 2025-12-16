@@ -1,15 +1,11 @@
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { generatePKCEPair, calculateCodeChallenge } from "@/utils/ext";
-import { AuthServices } from "@/services/auth.services";
+import { generatePKCEPair } from "@/utils/ext";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const GOOGLE_REDIRECT_URI = import.meta.env.VITE_GOOGLE_REDIRECT_URI;
-
-// Allowed redirect URIs (whitelist)
-const ALLOWED_REDIRECT_URIS = ["http://localhost:5173/auth/callback"] as const;
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox='0 0 24 24' aria-hidden='true'>
@@ -47,38 +43,6 @@ interface LoginPageProps {
   onGoogleLogin?: () => void;
   isGoogleLoading?: boolean;
   googleButtonDisabled?: boolean;
-}
-
-// Validate OAuth configuration
-function validateOAuthConfig(): boolean {
-  if (!GOOGLE_CLIENT_ID) {
-    console.error("GOOGLE_CLIENT_ID is not configured");
-    return false;
-  }
-
-  if (!GOOGLE_REDIRECT_URI) {
-    console.error("GOOGLE_REDIRECT_URI is not configured");
-    return false;
-  }
-
-  // Validate redirect URI is whitelisted
-  if (!ALLOWED_REDIRECT_URIS.includes(GOOGLE_REDIRECT_URI as any)) {
-    console.error("Redirect URI not in whitelist:", GOOGLE_REDIRECT_URI);
-    return false;
-  }
-
-  // Ensure HTTPS in production (allow localhost for development)
-  if (
-    import.meta.env.VITE_MODE === "production" &&
-    !GOOGLE_REDIRECT_URI.startsWith("https://")
-  ) {
-    if (!GOOGLE_REDIRECT_URI.startsWith("http://localhost")) {
-      console.error("Redirect URI must use HTTPS in production");
-      return false;
-    }
-  }
-
-  return true;
 }
 
 const TestimonialCard = ({
@@ -231,78 +195,38 @@ const sampleTestimonials: Testimonial[] = [
 const Login = () => {
   const { errorToast } = useToast();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [configValid, setConfigValid] = useState(false);
-  const [pkceData, setPkceData] = useState<{
-    codeVerifier: string;
-    serverState: string;
-  } | null>(null);
-
-  useEffect(() => {
-    const isValid = validateOAuthConfig();
-    setConfigValid(isValid);
-
-    if (!isValid) {
-      errorToast("OAuth configuration error. Please contact support.");
-      return;
-    }
-
-    const initPKCE = async () => {
-      try {
-        const { codeVerifier, codeChallenge } = await generatePKCEPair();
-
-        const response = await AuthServices.googlePkceInit({ codeChallenge });
-
-        if (response.data.success && response.data.data.state) {
-          setPkceData({
-            codeVerifier,
-            serverState: response.data.data.state,
-          });
-        }
-      } catch (err) {
-        console.error("PKCE init error:", err);
-      }
-    };
-
-    initPKCE();
-  }, []);
 
   const handleGoogleLogin = async () => {
-    if (!configValid) {
+    // Validate OAuth configuration
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI) {
       errorToast("OAuth configuration error. Please contact support.");
-      return;
-    }
-
-    if (!pkceData) {
-      errorToast("Authentication not ready. Please refresh and try again.");
       return;
     }
 
     try {
       setIsGoogleLoading(true);
 
-      const codeChallenge = await calculateCodeChallenge(pkceData.codeVerifier);
+      // STEP 1: Generate PKCE pair (code_verifier and code_challenge)
+      const { codeVerifier, codeChallenge } = await generatePKCEPair(128);
 
-      // Generate nonce for additional CSRF protection (OpenID Connect)
-      const nonce = crypto.randomUUID();
+      // STEP 2: Generate random state for CSRF protection
+      const state = crypto.randomUUID();
 
-      sessionStorage.setItem("pkce_verifier", pkceData.codeVerifier);
-      sessionStorage.setItem("pkce_server_state", pkceData.serverState);
-      sessionStorage.setItem("pkce_nonce", nonce);
+      // STEP 3: Store in sessionStorage (persists across OAuth redirect)
+      sessionStorage.setItem("pkce_verifier", codeVerifier);
+      sessionStorage.setItem("pkce_state", state);
 
-      // Build authorization URL
+      // STEP 4: Build Google OAuth authorization URL
       const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
       authUrl.searchParams.append("client_id", GOOGLE_CLIENT_ID);
       authUrl.searchParams.append("redirect_uri", GOOGLE_REDIRECT_URI);
       authUrl.searchParams.append("response_type", "code");
       authUrl.searchParams.append("scope", "openid email profile");
-      authUrl.searchParams.append("state", pkceData.serverState);
-      authUrl.searchParams.append("nonce", nonce);
-      authUrl.searchParams.append("access_type", "offline");
-      authUrl.searchParams.append("prompt", "consent");
+      authUrl.searchParams.append("state", state);
       authUrl.searchParams.append("code_challenge", codeChallenge);
       authUrl.searchParams.append("code_challenge_method", "S256");
 
-      // Redirect to Google OAuth
+      // STEP 5: Redirect to Google (page will reload on return)
       window.location.href = authUrl.toString();
     } catch (error) {
       console.error("OAuth initiation error:", error);
@@ -318,7 +242,7 @@ const Login = () => {
         testimonials={sampleTestimonials}
         onGoogleLogin={handleGoogleLogin}
         isGoogleLoading={isGoogleLoading}
-        googleButtonDisabled={!pkceData || !configValid}
+        googleButtonDisabled={isGoogleLoading}
       />
     </div>
   );

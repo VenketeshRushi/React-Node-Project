@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { removeCookies } from "@/utils/ext";
+import { AuthServices } from "@/services/auth.services";
 
 export interface AuthUser {
   id: string;
@@ -49,6 +50,7 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           error: null,
         });
+        AuthServices.logout();
         window.location.href = "/";
       },
     }),

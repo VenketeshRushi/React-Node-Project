@@ -28,7 +28,7 @@ const STATUS_MESSAGES: Record<number, string> = {
 };
 
 export const Axios = axios.create({
-  baseURL: import.meta.env.VITE_BASE_URL ?? "/api",
+  baseURL: import.meta.env.VITE_API_URL ?? "/api",
   timeout: 30000,
   withCredentials: true,
   headers: {

@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   BadgeCheck,
   Bell,
@@ -24,67 +23,17 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getCookies } from "@/utils/ext";
 import { Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth.store";
 
-type User = {
-  name: string;
-  email: string;
-  avatar: string;
-};
-
 export function NavUser() {
   const { isMobile } = useSidebar();
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const logout = useAuthStore(state => state.logout);
-
-  useEffect(() => {
-    setTimeout(() => {
-      const cookies = getCookies(["user"]);
-      if (cookies.user) {
-        try {
-          const parsed = JSON.parse(cookies.user);
-          setUser({
-            name: parsed.name,
-            email: parsed.email,
-            avatar: parsed.avatar_url,
-          });
-        } catch (err) {
-          console.error("Error parsing user cookie", err);
-        }
-      }
-      setIsLoading(false);
-    }, 0);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton size='lg' disabled>
-            <Avatar className='h-8 w-8 rounded-lg'>
-              <AvatarFallback>G</AvatarFallback>
-            </Avatar>
-            <div className='ml-2 grid flex-1 text-left text-sm leading-tight'>
-              <span className='truncate font-medium'>Guest</span>
-              <span className='truncate text-xs'></span>
-            </div>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    );
-  }
+  const { user, logout } = useAuthStore();
 
   const displayUser = user ?? {
     name: "Guest",
     email: "guest@example.com",
-    avatar: "/avatar.png",
-  };
-
-  const handleLogout = () => {
-    logout();
+    avatar_url: "/avatar.png",
   };
 
   return (
@@ -97,13 +46,18 @@ export function NavUser() {
               className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
             >
               <Avatar className='h-8 w-8 rounded-lg'>
-                <AvatarImage src={displayUser.avatar} alt={displayUser.name} />
+                <AvatarImage
+                  src={displayUser.avatar_url}
+                  alt={displayUser.name}
+                />
                 <AvatarFallback>{displayUser.name.charAt(0)}</AvatarFallback>
               </Avatar>
+
               <div className='grid flex-1 text-left text-sm leading-tight'>
                 <span className='truncate font-medium'>{displayUser.name}</span>
                 <span className='truncate text-xs'>{displayUser.email}</span>
               </div>
+
               <ChevronsUpDown className='ml-auto size-4' />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
@@ -115,14 +69,15 @@ export function NavUser() {
             sideOffset={4}
           >
             <DropdownMenuLabel className='p-0 font-normal'>
-              <div className='flex items-center gap-2 px-1 py-1.5 text-left text-sm'>
+              <div className='flex items-center gap-2 px-1 py-1.5'>
                 <Avatar className='h-8 w-8 rounded-lg'>
                   <AvatarImage
-                    src={displayUser.avatar}
+                    src={displayUser.avatar_url}
                     alt={displayUser.name}
                   />
                   <AvatarFallback>{displayUser.name.charAt(0)}</AvatarFallback>
                 </Avatar>
+
                 <div className='grid flex-1 text-left text-sm leading-tight'>
                   <span className='truncate font-medium'>
                     {displayUser.name}
@@ -133,8 +88,9 @@ export function NavUser() {
             </DropdownMenuLabel>
 
             <DropdownMenuSeparator />
+
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild className='cursor-pointer'>
+              <DropdownMenuItem asChild>
                 <Link to='/pricing'>
                   <Sparkles /> Upgrade to Pro
                 </Link>
@@ -142,23 +98,27 @@ export function NavUser() {
             </DropdownMenuGroup>
 
             <DropdownMenuSeparator />
+
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild className='cursor-pointer'>
+              <DropdownMenuItem asChild>
                 <Link to='/account'>
                   <BadgeCheck /> Account
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild className='cursor-pointer'>
+
+              <DropdownMenuItem asChild>
                 <Link to='/notifications'>
                   <Bell /> Notifications
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild className='cursor-pointer'>
+
+              <DropdownMenuItem asChild>
                 <Link to='/integrations'>
                   <Puzzle /> Integrations
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild className='cursor-pointer'>
+
+              <DropdownMenuItem asChild>
                 <Link to='/billing'>
                   <CreditCard /> Billing
                 </Link>
@@ -166,7 +126,8 @@ export function NavUser() {
             </DropdownMenuGroup>
 
             <DropdownMenuSeparator />
-            <DropdownMenuItem className='cursor-pointer' onClick={handleLogout}>
+
+            <DropdownMenuItem onClick={logout}>
               <LogOut /> Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

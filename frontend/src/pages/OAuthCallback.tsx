@@ -5,6 +5,21 @@ import { useAuthStore } from "@/stores/auth.store";
 import { Spinner } from "@/components/ui/spinner";
 import { AuthServices } from "@/services/auth.services";
 import type { NormalizedError } from "@/axios/instance";
+import { delay } from "@/utils/ext";
+
+// User clicks login
+//   → Generate PKCE + state
+//   → Store in sessionStorage
+//   → Redirect to Google
+//   → User approves
+//   → Google redirects back with code
+//   → Retrieve from sessionStorage
+//   → Verify state matches ✓
+//   → Send code + verifier to backend
+//   → Backend verifies with Google
+//   → Set cookies + return user
+//   → Clear sessionStorage
+//   → Navigate to dashboard
 
 const ERROR_MESSAGES = {
   ACCESS_DENIED: "You cancelled the sign-in process. Please try again.",
@@ -32,7 +47,6 @@ export default function OAuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Check for OAuth errors from Google
         const error = searchParams.get("error");
         if (error) {
           const errorMessage =
@@ -42,9 +56,8 @@ export default function OAuthCallback() {
 
           errorToast(errorMessage);
 
-          // Clear PKCE data on error
           sessionStorage.removeItem("pkce_verifier");
-          sessionStorage.removeItem("pkce_server_state");
+          sessionStorage.removeItem("pkce_state");
 
           setTimeout(() => navigate("/login", { replace: true }), 2000);
           return;
@@ -57,31 +70,28 @@ export default function OAuthCallback() {
         if (!code || !state) {
           errorToast(ERROR_MESSAGES.INVALID_STATE);
 
-          // Clear PKCE data
           sessionStorage.removeItem("pkce_verifier");
-          sessionStorage.removeItem("pkce_server_state");
+          sessionStorage.removeItem("pkce_state");
 
           setTimeout(() => navigate("/login", { replace: true }), 2000);
           return;
         }
 
-        // Retrieve PKCE data from sessionStorage
         const codeVerifier = sessionStorage.getItem("pkce_verifier");
-        const serverState = sessionStorage.getItem("pkce_server_state");
+        const storedState = sessionStorage.getItem("pkce_state");
 
-        if (!codeVerifier || !serverState) {
+        if (!codeVerifier || !storedState) {
           errorToast(ERROR_MESSAGES.INVALID_STATE);
           setTimeout(() => navigate("/login", { replace: true }), 2000);
           return;
         }
 
         // Verify state matches (CSRF protection)
-        if (state !== serverState) {
+        if (state !== storedState) {
           errorToast(ERROR_MESSAGES.INVALID_STATE);
 
-          // Clear invalid PKCE data
           sessionStorage.removeItem("pkce_verifier");
-          sessionStorage.removeItem("pkce_server_state");
+          sessionStorage.removeItem("pkce_state");
 
           setTimeout(() => navigate("/login", { replace: true }), 2000);
           return;
@@ -91,35 +101,32 @@ export default function OAuthCallback() {
         const response = await AuthServices.googleCallback({
           code,
           codeVerifier,
-          state: serverState,
         });
 
-        // Clear PKCE data after successful API call
-        sessionStorage.removeItem("pkce_verifier");
-        sessionStorage.removeItem("pkce_server_state");
+        console.log("googleCallback response", response);
 
-        if (!response.data.success || !response.data.data) {
+        sessionStorage.removeItem("pkce_verifier");
+        sessionStorage.removeItem("pkce_state");
+
+        if (!response.success || !response.data) {
           errorToast(ERROR_MESSAGES.SERVER_ERROR);
           setTimeout(() => navigate("/login", { replace: true }), 2000);
           return;
         }
 
-        // Store user in auth store
-        setUser(response.data.data);
+        setUser(response.data);
 
-        // Small delay for better UX
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await delay(300);
 
-        const destination = response.data.data.onboarding
+        const destination = response.data.onboarding
           ? "/onboarding"
           : "/dashboard";
         navigate(destination, { replace: true });
       } catch (err) {
         console.error("OAuth callback error:", err);
 
-        // Clear PKCE data on error
         sessionStorage.removeItem("pkce_verifier");
-        sessionStorage.removeItem("pkce_server_state");
+        sessionStorage.removeItem("pkce_state");
 
         const error = err as NormalizedError;
         let userMessage: string = ERROR_MESSAGES.DEFAULT;

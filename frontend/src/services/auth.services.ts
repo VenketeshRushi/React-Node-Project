@@ -1,10 +1,12 @@
 import Axios from "@/axios/instance";
 
 export const AuthServices = {
-  googlePkceInit: (payload: any) => {
-    return Axios.post("/auth/google/pkce/init", payload);
+  googleCallback: async (payload: { code: string; codeVerifier: string }) => {
+    const response = await Axios.post("/auth/google/callback", payload);
+    return response.data;
   },
-  googleCallback: (payload: any) => {
-    return Axios.post("/auth/google/callback", payload);
+  // Fire-and-Forget Method
+  logout: () => {
+    return Axios.post("/auth/logout").catch(() => {});
   },
 };
