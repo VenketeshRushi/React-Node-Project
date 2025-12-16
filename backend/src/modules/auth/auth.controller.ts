@@ -3,11 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { handleOAuthLogin } from '@/modules/auth/auth.service.js';
 import { setCookie } from '@/utils/cookies.js';
 import { config } from '@/config/index.js';
-import {
-  BadRequestError,
-  UnauthorizedError,
-  InternalError,
-} from '@/utils/CustomError.js';
+import { UnauthorizedError, ValidationError } from '@/utils/CustomError.js';
 import { sendSuccess } from '@/utils/response.js';
 
 const googleClient = new OAuth2Client(
@@ -18,70 +14,51 @@ const googleClient = new OAuth2Client(
 
 const isProduction = config.app.nodeEnv === 'production';
 
-/**
- * Handle Google OAuth callback with PKCE verification
- * - Client sends: authorization code + code_verifier
- * - Google verifies: SHA256(code_verifier) matches stored code_challenge
- * - Server validates: ID token signature and claims
- */
 export async function googleAuthCodeController(
   req: Request,
   res: Response
 ): Promise<void> {
   const { code, codeVerifier } = req.body;
 
-  // Validate required parameters
   if (!code || !codeVerifier) {
-    throw new BadRequestError(
-      'Missing required parameters: code and codeVerifier'
-    );
+    throw new ValidationError('Missing required parameters');
   }
 
-  // Validate code_verifier format (base64url, 43-128 chars)
   if (!/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier)) {
-    throw new BadRequestError('Invalid code_verifier format');
+    throw new ValidationError('Invalid request');
   }
 
-  // Exchange authorization code for tokens
-  // Google automatically verifies PKCE: sha256(codeVerifier) == code_challenge
   let tokens;
   try {
     const tokenResponse = await googleClient.getToken({
       code,
       redirect_uri: config.oauth.google.callbackUrl,
-      codeVerifier, // Google verifies this against the code_challenge
+      codeVerifier,
     });
     tokens = tokenResponse.tokens;
   } catch (err: any) {
-    console.error('Token exchange error:', err);
-
-    if (err.message?.includes('invalid_grant')) {
-      throw new UnauthorizedError('Authorization code expired or already used');
-    }
-    if (err.message?.includes('code_verifier')) {
-      throw new UnauthorizedError('PKCE verification failed');
-    }
-    throw new InternalError('Failed to exchange authorization code', {
-      cause: err?.message,
-    });
+    throw new UnauthorizedError();
   }
 
   if (!tokens?.id_token) {
-    throw new UnauthorizedError('No ID token received from Google');
+    throw new UnauthorizedError();
   }
 
-  // Verify ID token signature and claims
-  const ticket = await googleClient.verifyIdToken({
-    idToken: tokens.id_token,
-    audience: config.oauth.google.clientId,
-  });
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: config.oauth.google.clientId,
+    });
+    payload = ticket.getPayload();
+  } catch (err) {
+    throw new UnauthorizedError();
+  }
 
-  const payload = ticket.getPayload();
   if (!payload) {
-    throw new UnauthorizedError('Invalid Google ID token');
+    throw new UnauthorizedError();
   }
 
-  // Extract user profile from ID token
   const profile = {
     id: payload.sub,
     displayName: payload.name || '',
@@ -98,15 +75,18 @@ export async function googleAuthCodeController(
     _json: payload,
   };
 
-  // Create or update user in database, generate JWT
-  const result = await handleOAuthLogin('google', profile as any, req);
+  let result;
+  try {
+    result = await handleOAuthLogin('google', profile as any, req);
+  } catch (err) {
+    throw new UnauthorizedError();
+  }
 
-  // Set access token cookie with security flags
   setCookie(res, 'accessToken', result.accessToken, {
-    maxAge: 1000 * 60 * 60 * 24, // 1 day
-    httpOnly: false, // Set to true in production for better security
-    secure: isProduction, // HTTPS only in production
-    sameSite: 'lax', // CSRF protection
+    maxAge: 1000 * 60 * 60 * 24,
+    httpOnly: isProduction,
+    secure: isProduction,
+    sameSite: 'lax',
   });
 
   setCookie(
@@ -121,8 +101,8 @@ export async function googleAuthCodeController(
       onboarding: result.user.onboarding,
     }),
     {
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      httpOnly: false, // Frontend needs to read this
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+      httpOnly: false,
       secure: isProduction,
       sameSite: 'lax',
     }

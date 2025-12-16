@@ -3,9 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { generatePKCEPair } from "@/utils/ext";
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const GOOGLE_REDIRECT_URI = import.meta.env.VITE_GOOGLE_REDIRECT_URI;
+import { Link } from "react-router-dom";
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox='0 0 24 24' aria-hidden='true'>
@@ -53,7 +51,7 @@ const TestimonialCard = ({
   delay: string;
 }) => (
   <div
-    className={`animate-(--animate-testimonial-in) ${delay} flex items-start gap-3 rounded-3xl bg-card/40 backdrop-blur-xl border border-border/50 p-5 shadow-lg `}
+    className={`animate-(--animate-testimonial-in) ${delay} flex items-start gap-3 rounded-3xl bg-card/40 backdrop-blur-xl border border-border/50 p-5 shadow-lg`}
   >
     <img
       src={testimonial.avatarSrc}
@@ -88,7 +86,7 @@ const LoginPage: React.FC<LoginPageProps> = ({
               <div
                 className='animate-(--animate-slide-right-in) animate-delay-300 absolute inset-0 bg-cover bg-center transition-transform duration-1000 hover:scale-105'
                 style={{ backgroundImage: `url(${heroImageSrc})` }}
-              ></div>
+              />
             </div>
 
             {testimonials.length > 0 && (
@@ -105,6 +103,7 @@ const LoginPage: React.FC<LoginPageProps> = ({
             )}
           </section>
         )}
+
         <section className='flex flex-col justify-center p-8 md:p-12 lg:p-16 order-2 md:order-1 relative z-10 bg-background'>
           <div className='max-w-[360px] mx-auto w-full flex flex-col gap-8'>
             <div className='flex flex-col gap-2'>
@@ -114,27 +113,25 @@ const LoginPage: React.FC<LoginPageProps> = ({
               <p className='text-muted-foreground text-sm'>{description}</p>
             </div>
 
-            <div className='grid gap-4'>
-              <button
-                onClick={onGoogleLogin}
-                disabled={isGoogleLoading || googleButtonDisabled}
-                className={cn(
-                  "relative group/btn flex items-center justify-center gap-3 w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium rounded-lg transition-all duration-200",
-                  "hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm hover:shadow-md",
-                  "focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none",
-                  "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                )}
-              >
-                {isGoogleLoading ? (
-                  <Loader2 className='w-5 h-5 animate-spin text-zinc-500' />
-                ) : (
-                  <>
-                    <GoogleIcon className='w-5 h-5 transition-transform group-hover/btn:scale-110' />
-                    <span>Continue with Google</span>
-                  </>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={onGoogleLogin}
+              disabled={isGoogleLoading || googleButtonDisabled}
+              className={cn(
+                "relative group/btn flex items-center justify-center gap-3 w-full px-4 py-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium rounded-lg transition-all duration-200",
+                "hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm hover:shadow-md",
+                "focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none",
+                "disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              )}
+            >
+              {isGoogleLoading ? (
+                <Loader2 className='w-5 h-5 animate-spin text-zinc-500' />
+              ) : (
+                <>
+                  <GoogleIcon className='w-5 h-5 transition-transform group-hover/btn:scale-110' />
+                  <span>Continue with Google</span>
+                </>
+              )}
+            </button>
 
             <div className='relative'>
               <div className='absolute inset-0 flex items-center'>
@@ -149,19 +146,19 @@ const LoginPage: React.FC<LoginPageProps> = ({
 
             <p className='px-8 text-center text-xs text-muted-foreground'>
               By clicking continue, you agree to our{" "}
-              <a
-                href='#'
+              <Link
+                to='/'
                 className='underline underline-offset-4 hover:text-primary'
               >
                 Terms of Service
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a
-                href='#'
+              <Link
+                to='/'
                 className='underline underline-offset-4 hover:text-primary'
               >
                 Privacy Policy
-              </a>
+              </Link>
               .
             </p>
           </div>
@@ -178,18 +175,6 @@ const sampleTestimonials: Testimonial[] = [
     handle: "@sarahdigital",
     text: "Amazing platform! The user experience is seamless and the features are exactly what I needed.",
   },
-  {
-    avatarSrc: "https://randomuser.me/api/portraits/men/64.jpg",
-    name: "Marcus Johnson",
-    handle: "@marcustech",
-    text: "This service has transformed how I work. Clean design, powerful features, and excellent support.",
-  },
-  {
-    avatarSrc: "https://randomuser.me/api/portraits/men/32.jpg",
-    name: "David Martinez",
-    handle: "@davidcreates",
-    text: "I've tried many platforms, but this one stands out. Intuitive, reliable, and genuinely helpful for productivity.",
-  },
 ];
 
 const Login = () => {
@@ -197,40 +182,36 @@ const Login = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
-    // Validate OAuth configuration
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI) {
-      errorToast("OAuth configuration error. Please contact support.");
-      return;
-    }
-
     try {
       setIsGoogleLoading(true);
 
-      // STEP 1: Generate PKCE pair (code_verifier and code_challenge)
       const { codeVerifier, codeChallenge } = await generatePKCEPair(128);
-
-      // STEP 2: Generate random state for CSRF protection
       const state = crypto.randomUUID();
 
-      // STEP 3: Store in sessionStorage (persists across OAuth redirect)
       sessionStorage.setItem("pkce_verifier", codeVerifier);
       sessionStorage.setItem("pkce_state", state);
 
-      // STEP 4: Build Google OAuth authorization URL
       const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-      authUrl.searchParams.append("client_id", GOOGLE_CLIENT_ID);
-      authUrl.searchParams.append("redirect_uri", GOOGLE_REDIRECT_URI);
+      authUrl.searchParams.append(
+        "client_id",
+        import.meta.env.VITE_GOOGLE_CLIENT_ID
+      );
+      authUrl.searchParams.append(
+        "redirect_uri",
+        import.meta.env.VITE_GOOGLE_REDIRECT_URI
+      );
       authUrl.searchParams.append("response_type", "code");
       authUrl.searchParams.append("scope", "openid email profile");
       authUrl.searchParams.append("state", state);
+      authUrl.searchParams.append("access_type", "offline");
+      authUrl.searchParams.append("prompt", "consent");
       authUrl.searchParams.append("code_challenge", codeChallenge);
       authUrl.searchParams.append("code_challenge_method", "S256");
 
-      // STEP 5: Redirect to Google (page will reload on return)
       window.location.href = authUrl.toString();
-    } catch (error) {
-      console.error("OAuth initiation error:", error);
+    } catch {
       errorToast("Failed to initiate Google Sign In. Please try again.");
+    } finally {
       setIsGoogleLoading(false);
     }
   };
