@@ -6,19 +6,36 @@ const allowedOrigins: string[] = [
   config.app.allowedOrigin,
   config.app.frontendUrl,
 ].filter(Boolean);
+
 const isProduction = config.app.nodeEnv === 'production';
+
+// Regex for local development - only common ports (3000-9999)
+const LOCAL_DEV_REGEX = /^https?:\/\/(localhost|127\.0\.0\.1):([3-9]\d{3})$/;
 
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    if (
-      !isProduction &&
-      /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0):\d+$/.test(origin)
-    ) {
+    // Allow requests with no origin (mobile apps, curl, postman, etc.)
+    if (!origin) {
       return callback(null, true);
     }
-    logger.warn('CORS violation attempt', { origin });
+
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // In development, allow localhost with common ports
+    if (!isProduction && LOCAL_DEV_REGEX.test(origin)) {
+      return callback(null, true);
+    }
+
+    // Log CORS violation for monitoring
+    logger.warn('CORS violation attempt', {
+      origin,
+      allowed: allowedOrigins,
+      environment: config.app.nodeEnv,
+    });
+
     callback(new Error(`CORS policy violation: Origin ${origin} not allowed`));
   },
   credentials: true,
@@ -31,12 +48,19 @@ export const corsMiddleware = cors({
     'Origin',
     'Cache-Control',
     'X-CSRF-Token',
+    'X-Request-Id',
   ],
   exposedHeaders: [
     'X-Request-Id',
     'X-RateLimit-Limit',
     'X-RateLimit-Remaining',
+    'X-RateLimit-Reset',
     'Retry-After',
-  ], // Add this so frontend can read these headers
+    'X-Cache',
+    'X-Cache-Key',
+    'Age',
+  ],
   maxAge: 86400, // Cache preflight for 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 });

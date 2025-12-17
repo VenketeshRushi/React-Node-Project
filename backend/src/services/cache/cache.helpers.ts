@@ -1,13 +1,23 @@
 /**
- * Sanitize cache key to prevent injection
+ * Sanitize cache key to prevent Redis injection
  */
 export function sanitizeCacheKey(key: string): string {
-  return key.replace(/[^a-zA-Z0-9:/_?&=-]/g, '_');
+  if (!key) return '';
+
+  return key
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9:/_?&=.-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
 }
 
 /**
- * Build a cache key with prefix
+ * Build full cache key with prefix
  */
 export function buildCacheKey(prefix: string, key: string): string {
-  return `${prefix}:${sanitizeCacheKey(key)}`;
+  if (!prefix || !key) {
+    throw new Error('Cache prefix and key are required');
+  }
+
+  return `${sanitizeCacheKey(prefix)}:${sanitizeCacheKey(key)}`;
 }

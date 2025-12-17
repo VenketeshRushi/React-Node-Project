@@ -187,6 +187,44 @@ export const expire = async (key: string, ttl: number): Promise<boolean> => {
 };
 
 /**
+ * Scan keys by pattern (safe for production)
+ * Uses SCAN command to iterate without blocking Redis
+ */
+export const scanKeys = async (
+  pattern: string,
+  count = 100
+): Promise<string[]> => {
+  try {
+    const keys: string[] = [];
+    let cursor = '0';
+
+    do {
+      const [nextCursor, matchedKeys] = await redisClient.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        count
+      );
+
+      cursor = nextCursor;
+      keys.push(...matchedKeys);
+
+      // Safety limit to prevent infinite loops
+      if (keys.length > 100000) {
+        logger.warn(`scanKeys found >100k keys for pattern: ${pattern}`);
+        break;
+      }
+    } while (cursor !== '0');
+
+    return keys;
+  } catch (error) {
+    logger.error('Redis scanKeys error', { pattern, error });
+    throw new Error(`Redis scanKeys failed for pattern: ${pattern}`);
+  }
+};
+
+/**
  * Create a Redis pipeline for batch operations
  */
 export const pipeline = (): Pipeline => redisClient.pipeline() as Pipeline;

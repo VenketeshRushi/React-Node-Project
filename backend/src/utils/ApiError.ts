@@ -111,6 +111,40 @@ export class ApiError extends Error {
         );
       }
 
+      // Multer errors
+      if ((error as any).code === 'LIMIT_FILE_SIZE') {
+        return new ApiError(
+          ErrorType.PAYLOAD_TOO_LARGE,
+          'File size exceeds maximum allowed limit',
+          413,
+          true,
+          { maxSize: (error as any).limit },
+          error
+        );
+      }
+
+      if ((error as any).code === 'LIMIT_FILE_COUNT') {
+        return new ApiError(
+          ErrorType.BAD_REQUEST,
+          'Too many files uploaded',
+          400,
+          true,
+          { maxFiles: (error as any).limit },
+          error
+        );
+      }
+
+      if ((error as any).code === 'LIMIT_UNEXPECTED_FILE') {
+        return new ApiError(
+          ErrorType.BAD_REQUEST,
+          'Unexpected field in file upload',
+          400,
+          true,
+          { field: (error as any).field },
+          error
+        );
+      }
+
       // Generic error fallback
       return new ApiError(
         ErrorType.INTERNAL,
@@ -155,56 +189,93 @@ export class ApiError extends Error {
    * Create error from database error (Prisma, Drizzle, etc.)
    */
   static fromDatabaseError(error: any): ApiError {
+    // Safe access to error properties
+    const errorCode = error?.cause?.code || error?.code;
+    const errorColumn = error?.cause?.column;
+    const errorTable = error?.cause?.table;
+
     // Drizzle query error
     if (
       error.name === 'DrizzleQueryError' ||
       error.constructor.name === 'DrizzleQueryError'
     ) {
       // PostgreSQL syntax error (42601)
-      if (error.cause?.code === '42601') {
+      if (errorCode === '42601') {
         return new ApiError(
           ErrorType.DATABASE_ERROR,
           'Database query error',
           500,
           false,
-          { code: error.cause.code },
+          { code: errorCode },
           error
         );
       }
 
       // PostgreSQL unique violation (23505)
-      if (error.cause?.code === '23505') {
+      if (errorCode === '23505') {
+        const constraint = error?.cause?.constraint_name || 'unique constraint';
         return new ApiError(
           ErrorType.CONFLICT,
           'Resource already exists',
           409,
           true,
-          { constraint: 'unique', code: error.cause.code },
+          {
+            constraint: constraint || 'unique',
+            code: errorCode,
+            detail: error?.cause?.detail,
+            table: errorTable,
+          },
           error
         );
       }
 
       // PostgreSQL foreign key violation (23503)
-      if (error.cause?.code === '23503') {
+      if (errorCode === '23503') {
         return new ApiError(
           ErrorType.BAD_REQUEST,
           'Referenced resource does not exist',
           400,
           true,
-          { constraint: 'foreign_key', code: error.cause.code },
+          {
+            constraint: 'foreign_key',
+            code: errorCode,
+            detail: error?.cause?.detail,
+            table: errorTable,
+          },
           error
         );
       }
 
       // PostgreSQL not null violation (23502)
-      if (error.cause?.code === '23502') {
-        const column = error.cause.column || 'unknown';
+      if (errorCode === '23502') {
+        const column = errorColumn || 'unknown';
         return new ApiError(
           ErrorType.VALIDATION_ERROR,
           `Required field missing: ${column}`,
           422,
           true,
-          { field: column, constraint: 'not_null', code: error.cause.code },
+          {
+            field: column,
+            constraint: 'not_null',
+            code: errorCode,
+            table: errorTable,
+          },
+          error
+        );
+      }
+
+      // PostgreSQL check violation (23514)
+      if (errorCode === '23514') {
+        return new ApiError(
+          ErrorType.VALIDATION_ERROR,
+          'Data violates check constraint',
+          422,
+          true,
+          {
+            constraint: 'check',
+            code: errorCode,
+            detail: error?.cause?.detail,
+          },
           error
         );
       }
@@ -215,7 +286,7 @@ export class ApiError extends Error {
         'Database operation failed',
         500,
         false,
-        { code: error.cause?.code },
+        { code: errorCode },
         error
       );
     }
@@ -228,7 +299,8 @@ export class ApiError extends Error {
         `Resource already exists: ${fields.join(', ')}`,
         409,
         true,
-        { fields, constraint: 'unique' }
+        { fields, constraint: 'unique' },
+        error
       );
     }
 
@@ -239,13 +311,21 @@ export class ApiError extends Error {
         'Referenced resource does not exist',
         400,
         true,
-        { constraint: 'foreign_key' }
+        { constraint: 'foreign_key', field: error.meta?.field_name },
+        error
       );
     }
 
     // Prisma not found (P2025)
     if (error.code === 'P2025') {
-      return new ApiError(ErrorType.NOT_FOUND, 'Record not found', 404, true);
+      return new ApiError(
+        ErrorType.NOT_FOUND,
+        'Record not found',
+        404,
+        true,
+        { cause: error.meta?.cause },
+        error
+      );
     }
 
     // Prisma connection error (P1001)
@@ -255,7 +335,8 @@ export class ApiError extends Error {
         'Database connection failed',
         503,
         true,
-        { code: error.code }
+        { code: error.code },
+        error
       );
     }
 
@@ -265,7 +346,7 @@ export class ApiError extends Error {
       'Database operation failed',
       500,
       false,
-      { code: error.code },
+      { code: errorCode },
       error
     );
   }
@@ -287,5 +368,19 @@ export class ApiError extends Error {
    */
   getRetryAfter(): number | undefined {
     return this.data?.retryAfter;
+  }
+
+  /**
+   * Convert to JSON for logging/response
+   */
+  toJSON(): Record<string, any> {
+    return {
+      type: this.type,
+      message: this.message,
+      statusCode: this.statusCode,
+      isOperational: this.isOperational,
+      data: this.data,
+      timestamp: this.timestamp,
+    };
   }
 }

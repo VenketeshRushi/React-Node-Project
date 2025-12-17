@@ -11,9 +11,9 @@ import { ensureUploadDirs } from './services/storage/multer.storage.js';
 import { helmetMiddleware } from './middlewares/security/helmet.js';
 import { permissionsPolicyMiddleware } from './middlewares/security/permissionsPolicy.js';
 import { corsMiddleware } from './middlewares/security/cors.js';
-import { compressionMiddleware } from './middlewares/compression.js';
-import { requestLogger } from './middlewares/logging/requestLogger.js';
-import { rateLimiter } from './middlewares/security/rateLimiter.js';
+import { compressionMiddleware } from './middlewares/security/compression.js';
+import { requestLogger } from './middlewares/requestLogger.js';
+import { rateLimiter } from './middlewares/rateLimiter.js';
 
 import { NotFoundError } from './utils/CustomError.js';
 import { errorHandler } from './middlewares/errorHandler.js';
@@ -24,12 +24,14 @@ import authRouter from './modules/auth/auth.routes.js';
 
 const app: Express = express();
 
+// Create logs directory if it doesn't exist
 const logsDir = path.join(process.cwd(), 'logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
   logger.info('Created logs directory', { path: logsDir });
 }
 
+// Ensure upload directories exist
 ensureUploadDirs();
 
 // Security and proxy settings
@@ -88,6 +90,7 @@ app.use(cookieParser(config.app.cookieSecret));
 app.use(compressionMiddleware);
 app.use(requestLogger);
 
+// API Routes
 app.use('/api/auth', authRouter);
 
 app.get(
@@ -98,7 +101,6 @@ app.get(
   }
 );
 
-// Health check routes
 app.get(
   '/health',
   rateLimiter('health'),

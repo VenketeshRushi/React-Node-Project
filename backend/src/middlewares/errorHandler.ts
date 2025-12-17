@@ -4,6 +4,52 @@ import { logger } from '@/services/logging/logger.js';
 import { getClientIp } from '@/utils/ext.js';
 import type { Request, Response, NextFunction } from 'express';
 
+function sanitizeBody(body: any): any {
+  if (!body || typeof body !== 'object') return body;
+
+  const sensitiveFields = [
+    'password',
+    'token',
+    'secret',
+    'apiKey',
+    'api_key',
+    'accessToken',
+    'access_token',
+    'refreshToken',
+    'refresh_token',
+    'creditCard',
+    'credit_card',
+    'cardNumber',
+    'card_number',
+    'cvv',
+    'ssn',
+    'privateKey',
+    'private_key',
+  ];
+
+  const sanitized = Array.isArray(body) ? [...body] : { ...body };
+
+  const sanitizeObject = (obj: any): any => {
+    if (!obj || typeof obj !== 'object') return obj;
+
+    for (const key in obj) {
+      const lowerKey = key.toLowerCase();
+
+      if (
+        sensitiveFields.some(field => lowerKey.includes(field.toLowerCase()))
+      ) {
+        obj[key] = '[REDACTED]';
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        obj[key] = sanitizeObject(obj[key]);
+      }
+    }
+
+    return obj;
+  };
+
+  return sanitizeObject(sanitized);
+}
+
 export const errorHandler = (
   err: unknown,
   req: Request,
@@ -15,8 +61,7 @@ export const errorHandler = (
     req.id || (req.headers['x-request-id'] as string) || 'unknown';
   const isDevelopment = config.app.nodeEnv === 'development';
 
-  // Build logging context
-  const context = {
+  const context: any = {
     requestId,
     path: req.path,
     method: req.method,
@@ -25,28 +70,30 @@ export const errorHandler = (
     ip: getClientIp(req),
     userAgent: req.get('user-agent'),
     userId: (req as any).user?.id,
-    // Log full details server-side
-    cause: (apiError as any).cause,
-    ...(isDevelopment && {
-      body: req.body,
-      query: req.query,
-      params: req.params,
-    }),
   };
 
-  // Log based on severity
+  if (isDevelopment) {
+    context.body = sanitizeBody(req.body);
+    context.query = req.query;
+    context.params = req.params;
+  }
+
   if (!apiError.isOperational) {
     logger.error(apiError.message, {
       ...context,
       stack: apiError.stack,
+      cause: (apiError as any).cause,
     });
   } else if (apiError.statusCode >= 500) {
-    logger.error(apiError.message, { ...context, stack: apiError.stack });
+    logger.error(apiError.message, {
+      ...context,
+      stack: apiError.stack,
+      cause: (apiError as any).cause,
+    });
   } else if (apiError.statusCode >= 400) {
     logger.warn(apiError.message, context);
   }
 
-  // Prevent duplicate responses
   if (res.headersSent) {
     logger.error('Cannot send error response - headers already sent', {
       requestId,
@@ -56,16 +103,13 @@ export const errorHandler = (
     return;
   }
 
-  // Set security headers
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Request-Id', requestId);
 
-  // Add Retry-After header for rate limits
   if (apiError.isRetryable() && apiError.getRetryAfter()) {
     res.setHeader('Retry-After', apiError.getRetryAfter()!);
   }
 
-  // Prepare client response (NEVER expose sensitive details)
   const shouldSanitize = !apiError.isOperational || apiError.statusCode >= 500;
 
   const clientMessage =
@@ -76,7 +120,6 @@ export const errorHandler = (
   const clientType =
     shouldSanitize && !isDevelopment ? ErrorType.INTERNAL : apiError.type;
 
-  // Build response data
   const responseData: any = {
     success: false,
     error: {
@@ -87,21 +130,20 @@ export const errorHandler = (
     timestamp: apiError.timestamp,
   };
 
-  // Only add data in development or for operational client errors
-  if (isDevelopment && apiError.data) {
-    responseData.error.data = {
-      ...apiError.data,
-      stack: apiError.stack?.split('\n').map(line => line.trim()),
-    };
+  if (isDevelopment) {
+    if (apiError.data) {
+      responseData.error.data = apiError.data;
+    }
+    responseData.error.stack = apiError.stack
+      ?.split('\n')
+      .map(line => line.trim());
   } else if (
     apiError.isOperational &&
     apiError.statusCode < 500 &&
     apiError.data
   ) {
-    // Only expose data for client errors (4xx) in production
     responseData.error.data = apiError.data;
   }
 
-  // Send error response
   res.status(apiError.statusCode).json(responseData);
 };

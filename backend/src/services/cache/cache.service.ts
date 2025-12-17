@@ -1,9 +1,14 @@
 import { logger } from '@/services/logging/logger.js';
-import { getKey, setKey, delKey } from '@/services/redis/redis.service.js';
+import {
+  getKey,
+  setKey,
+  delKey,
+  delKeys,
+} from '@/services/redis/redis.service.js';
 import { buildCacheKey } from './cache.helpers.js';
 
 /**
- * Set cache with error handling
+ * Set cache with TTL
  */
 export async function setCache(
   prefix: string,
@@ -11,63 +16,108 @@ export async function setCache(
   value: any,
   ttl = 60
 ): Promise<void> {
+  if (!prefix || !key) return;
+
   const fullKey = buildCacheKey(prefix, key);
+
   try {
-    await setKey(fullKey, JSON.stringify(value), ttl);
-    logger.debug(`[Cache] Stored: ${fullKey} (TTL: ${ttl}s)`);
+    const serialized = JSON.stringify(value);
+    await setKey(fullKey, serialized, ttl);
+    logger.debug(`[Cache] SET: ${fullKey} (TTL: ${ttl}s)`);
   } catch (error) {
-    logger.error(`[Cache] Failed to store ${fullKey}:`, error);
-    // Don't throw - fail gracefully
+    logger.error(`[Cache] SET failed for ${fullKey}:`, error);
+    // Fail silently - cache should never break the app
   }
 }
 
 /**
- * Get cache with error handling
+ * Get cached value
  */
 export async function getCache<T = any>(
   prefix: string,
   key: string
 ): Promise<T | null> {
+  if (!prefix || !key) return null;
+
   const fullKey = buildCacheKey(prefix, key);
+
   try {
     const data = await getKey(fullKey);
     if (!data) return null;
 
     const parsed = JSON.parse(data) as T;
+    logger.debug(`[Cache] GET: ${fullKey}`);
     return parsed;
   } catch (error) {
-    logger.error(`[Cache] Failed to retrieve ${fullKey}:`, error);
+    logger.error(`[Cache] GET failed for ${fullKey}:`, error);
     return null;
   }
 }
 
 /**
- * Delete cache entry
+ * Delete single cache entry
  */
 export async function deleteCache(prefix: string, key: string): Promise<void> {
+  if (!prefix || !key) return;
+
   const fullKey = buildCacheKey(prefix, key);
+
   try {
     await delKey(fullKey);
-    logger.debug(`[Cache] Deleted: ${fullKey}`);
+    logger.debug(`[Cache] DEL: ${fullKey}`);
   } catch (error) {
-    logger.error(`[Cache] Failed to delete ${fullKey}:`, error);
-    // Don't throw - fail gracefully
+    logger.error(`[Cache] DEL failed for ${fullKey}:`, error);
+  }
+}
+
+/**
+ * Delete multiple cache entries
+ */
+export async function deleteCacheBatch(
+  prefix: string,
+  keys: string[]
+): Promise<void> {
+  if (!prefix || !keys.length) return;
+
+  try {
+    const fullKeys = keys.map(key => buildCacheKey(prefix, key));
+    await delKeys(fullKeys);
+    logger.debug(`[Cache] DEL ${fullKeys.length} keys for prefix: ${prefix}`);
+  } catch (error) {
+    logger.error(`[Cache] Batch delete failed for prefix ${prefix}:`, error);
   }
 }
 
 /**
  * Clear all cache entries by prefix
- * Note: Requires Redis SCAN implementation
  */
-export async function clearCacheByPrefix(prefix: string): Promise<void> {
+export async function clearCacheByPrefix(prefix: string): Promise<number> {
+  if (!prefix) return 0;
+
   try {
-    logger.info(`[Cache] Clearing all entries with prefix: ${prefix}`);
-    // TODO: Implement with Redis SCAN
-    // const keys = await scanKeys(`${prefix}:*`);
-    // await Promise.all(keys.map(key => delKey(key)));
-    logger.warn('[Cache] clearCacheByPrefix not fully implemented');
+    const { scanKeys } = await import('@/services/redis/redis.service.js');
+    const pattern = `${prefix}:*`;
+    const keys = await scanKeys(pattern);
+
+    if (keys.length === 0) {
+      logger.debug(`[Cache] No keys found for prefix: ${prefix}`);
+      return 0;
+    }
+
+    // Delete in batches
+    const batchSize = 100;
+    let deleted = 0;
+
+    for (let i = 0; i < keys.length; i += batchSize) {
+      const batch = keys.slice(i, i + batchSize);
+      await delKeys(batch);
+      deleted += batch.length;
+    }
+
+    logger.info(`[Cache] Cleared ${deleted} keys for prefix: ${prefix}`);
+    return deleted;
   } catch (error) {
-    logger.error(`[Cache] Failed to clear prefix ${prefix}:`, error);
-    throw error;
+    logger.error(`[Cache] Clear prefix failed for ${prefix}:`, error);
+    return 0;
   }
 }
