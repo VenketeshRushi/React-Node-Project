@@ -126,17 +126,19 @@ export async function handleOAuthLogin(
     }
 
     // Generate tokens
-    const { accessToken } = await JWT.generateTokens({
+    const { accessToken, refreshToken } = await JWT.generateTokens({
       id: user.id,
       email: user.email,
       role: user.role,
       name: user.name,
-      avatar_url: user.avatar_url,
       onboarding: user.onboarding,
+      is_active: user.is_active,
+      is_banned: user.is_banned,
     });
 
     return {
       accessToken,
+      refreshToken,
       user: sanitizeUser(user),
     };
   } catch (error: any) {

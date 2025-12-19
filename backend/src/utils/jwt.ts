@@ -15,7 +15,8 @@ export interface JwtPayloadData {
   role: string;
   name: string;
   onboarding: boolean;
-  avatar_url?: string | null;
+  is_active: boolean;
+  is_banned: boolean;
 }
 
 export class JwtPayload implements JwtPayloadData {
@@ -30,6 +31,8 @@ export class JwtPayload implements JwtPayloadData {
   name: string;
   onboarding: boolean;
   avatar_url?: string | null;
+  is_active: boolean;
+  is_banned: boolean;
   type: JwtTokenType;
 
   constructor(payload: JwtPayloadData, type: JwtTokenType = 'accessToken') {
@@ -40,8 +43,9 @@ export class JwtPayload implements JwtPayloadData {
     this.email = payload.email;
     this.role = payload.role;
     this.name = payload.name;
-    this.avatar_url = payload.avatar_url || null;
     this.onboarding = payload.onboarding;
+    this.is_active = payload.is_active;
+    this.is_banned = payload.is_banned;
     this.type = type;
     this.iat = Math.floor(Date.now() / 1000);
     const validity =

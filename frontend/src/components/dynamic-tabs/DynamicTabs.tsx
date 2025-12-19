@@ -7,17 +7,20 @@ interface DynamicTabsProps {
   tabs: TabItem[];
   defaultTabId?: string;
   tabClassName?: string;
+  onTabChange?: (tabId: string) => void;
 }
 
 export const DynamicTabs: React.FC<DynamicTabsProps> = ({
   tabs,
   defaultTabId,
   tabClassName,
+  onTabChange,
 }) => {
   return (
     <Tabs
       defaultValue={defaultTabId || tabs[0]?.id}
       className={cn("", tabClassName)}
+      onValueChange={onTabChange}
     >
       <TabsList className='flex space-x-4 border-b border-primary-200 mb-4 px-2'>
         {tabs.map(tab => (

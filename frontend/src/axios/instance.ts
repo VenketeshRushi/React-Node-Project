@@ -1,4 +1,7 @@
-import axios, { type AxiosResponse } from "axios";
+import axios, {
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from "axios";
 import { useAuthStore } from "@/stores/auth.store";
 import { toast } from "react-hot-toast";
 
@@ -37,16 +40,76 @@ export const Axios = axios.create({
   },
 });
 
-Axios.interceptors.request.use(config => config);
+// Track if we're currently refreshing to prevent multiple refresh calls
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
 
+/**
+ * Process queued requests after token refresh
+ */
+const processQueue = (error: unknown = null) => {
+  failedQueue.forEach(promise => {
+    if (error) {
+      promise.reject(error);
+    } else {
+      promise.resolve();
+    }
+  });
+  failedQueue = [];
+};
+
+/**
+ * Refresh the access token
+ */
+const refreshAccessToken = async (): Promise<boolean> => {
+  try {
+    const response = await axios.post(
+      `${import.meta.env.VITE_API_URL ?? "/api"}/auth/refresh`,
+      {},
+      {
+        withCredentials: true,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.data?.data?.accessToken) {
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Token refresh failed:", error);
+    return false;
+  }
+};
+
+// Request interceptor
+Axios.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    return config;
+  },
+  error => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor with token refresh logic
 Axios.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error): Promise<NormalizedError> => {
+  async error => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
+
     let status: number | null = null;
     let type: string | null = null;
     let message = "Network Error";
     let data: unknown = undefined;
-    console.log(error);
+
     if (axios.isAxiosError(error)) {
       if (error.response) {
         status = error.response.status;
@@ -55,17 +118,85 @@ Axios.interceptors.response.use(
         type = responseData?.type ?? null;
         message =
           responseData?.message ?? STATUS_MESSAGES[status] ?? `Error ${status}`;
+        data = responseData?.data;
 
-        if (status === 401) {
-          toast.error("Session expired. Please log in again.");
-          useAuthStore.getState().logout();
-          return Promise.reject({
-            status,
-            type,
-            message: "Session expired. Please log in again.",
-          });
+        // Handle 401 Unauthorized - Try to refresh token
+        if (status === 401 && !originalRequest._retry) {
+          // Skip refresh for auth endpoints
+          if (
+            originalRequest.url?.includes("/auth/login") ||
+            originalRequest.url?.includes("/auth/refresh") ||
+            originalRequest.url?.includes("/auth/google/callback")
+          ) {
+            toast.error(message);
+            useAuthStore.getState().logout();
+            return Promise.reject({
+              status,
+              type,
+              message,
+              data: data !== undefined ? data : null,
+            });
+          }
+
+          // If already refreshing, queue this request
+          if (isRefreshing) {
+            return new Promise((resolve, reject) => {
+              failedQueue.push({ resolve, reject });
+            })
+              .then(() => {
+                return Axios(originalRequest);
+              })
+              .catch(err => {
+                return Promise.reject(err);
+              });
+          }
+
+          // Mark this request as retried
+          originalRequest._retry = true;
+          isRefreshing = true;
+
+          try {
+            const refreshSuccess = await refreshAccessToken();
+
+            if (refreshSuccess) {
+              // Token refreshed successfully
+              isRefreshing = false;
+              processQueue();
+
+              // Retry the original request
+              return Axios(originalRequest);
+            } else {
+              // Refresh failed
+              isRefreshing = false;
+              processQueue(new Error("Token refresh failed"));
+
+              toast.error("Session expired. Please log in again.");
+              useAuthStore.getState().logout();
+
+              return Promise.reject({
+                status,
+                type,
+                message: "Session expired. Please log in again.",
+                data: data !== undefined ? data : null,
+              });
+            }
+          } catch (refreshError) {
+            isRefreshing = false;
+            processQueue(refreshError);
+
+            toast.error("Session expired. Please log in again.");
+            useAuthStore.getState().logout();
+
+            return Promise.reject({
+              status,
+              type,
+              message: "Session expired. Please log in again.",
+              data: data !== undefined ? data : null,
+            });
+          }
         }
 
+        // Handle other error status codes
         toast.error(message);
       } else if (error.request) {
         message = "Something went wrong. Please try again after some time.";
@@ -85,7 +216,7 @@ Axios.interceptors.response.use(
       type,
       message,
       data: data !== undefined ? data : null,
-    });
+    } as NormalizedError);
   }
 );
 

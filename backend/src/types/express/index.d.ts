@@ -18,6 +18,8 @@ declare global {
         role: string;
         onboarding?: boolean;
         avatar_url?: string | null;
+        is_banned: boolean;
+        is_active: boolean;
       };
 
       /**

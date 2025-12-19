@@ -3,17 +3,6 @@ import { DynamicForm } from "@/components/dynamic-form/DynamicForm";
 import type { ButtonConfig, FieldConfig } from "@/interface/DynamicForm";
 import { useAuthStore } from "@/stores/auth.store";
 
-/**
- * Updated onboarding form for India-only users:
- * - country: fixed to "India"
- * - timezone: only "Asia/Kolkata"
- * - state: all 28 states + 8 union territories
- * - city: list of common/major Indian cities
- *
- * Sources: list of states/UTs and cities (Wikipedia / Census lists).
- * See: States & UTs of India; Cities by population; India timezone (Asia/Kolkata).
- */
-
 const INDIAN_STATES_AND_UTS = [
   // 28 States
   { label: "Andhra Pradesh", value: "Andhra Pradesh" },

@@ -21,6 +21,7 @@ import { getDetailedHealthStatus } from './services/health.service.js';
 import { cacheMiddleware } from './middlewares/cache.js';
 
 import authRouter from './modules/auth/auth.routes.js';
+import userRouter from './modules/user/user.routes.js';
 
 const app: Express = express();
 
@@ -92,6 +93,7 @@ app.use(requestLogger);
 
 // API Routes
 app.use('/api/auth', authRouter);
+app.use('/api/user', userRouter);
 
 app.get(
   '/ping',

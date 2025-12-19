@@ -59,6 +59,7 @@ export interface OAuthProfile {
 
 export interface OAuthResponse {
   accessToken: string;
+  refreshToken: string;
   user: UserWithoutPassword;
 }
 
