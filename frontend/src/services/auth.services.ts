@@ -5,7 +5,7 @@ export const AuthServices = {
     const response = await Axios.post("/auth/google/callback", payload);
     return response.data;
   },
-  // Fire-and-Forget Method
+
   logout: () => {
     return Axios.post("/auth/logout").catch(() => {});
   },

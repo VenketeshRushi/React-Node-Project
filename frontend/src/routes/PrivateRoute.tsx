@@ -1,16 +1,22 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { useAuthStore } from "@/stores/auth.store";
+import { useAuthStore, useUser, useIsAuthenticated } from "@/stores/auth.store";
 
 const PrivateRoute = () => {
   const location = useLocation();
-  const { isAuthenticated, user } = useAuthStore();
+  const isAuthenticated = useIsAuthenticated();
+  const user = useUser();
+  const { isOnboardingComplete } = useAuthStore();
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <Navigate to='/login' replace state={{ from: location }} />;
   }
 
-  if (user?.onboarding && location.pathname !== "/onboarding") {
+  if (!isOnboardingComplete() && location.pathname !== "/onboarding") {
     return <Navigate to='/onboarding' replace />;
+  }
+
+  if (isOnboardingComplete() && location.pathname === "/onboarding") {
+    return <Navigate to='/dashboard' replace />;
   }
 
   return <Outlet />;

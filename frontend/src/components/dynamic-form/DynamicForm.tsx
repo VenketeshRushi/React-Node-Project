@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { type ButtonConfig, type FieldConfig } from "@/interface/DynamicForm";
+import { Loader2 } from "lucide-react";
 
 interface DynamicFormProps {
   fields: FieldConfig[];
@@ -33,6 +34,9 @@ interface DynamicFormProps {
   formClassName?: string;
   formFieldsClassName?: string;
   formButtonClassName?: string;
+  showCard?: boolean;
+  isSubmitting?: boolean;
+  disabled?: boolean;
 }
 
 export const DynamicForm: React.FC<DynamicFormProps> = ({
@@ -42,6 +46,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
   formClassName,
   formFieldsClassName,
   formButtonClassName,
+  showCard = true,
+  isSubmitting = false,
+  disabled = false,
 }) => {
   const headerField = fields.find(f => f.type === "header");
   const formFields = fields.filter(f => f.type !== "header");
@@ -71,21 +78,53 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     formFields.forEach(field => {
       const rules = field.validation;
       const value = formData[field.name];
+
       if (!rules) return;
-      if (rules.required?.value && !value) {
-        err[field.name] = rules.required.message;
-        return;
+
+      // Required validation
+      if (rules.required?.value) {
+        if (field.type === "checkbox" || field.type === "switch") {
+          if (!value) {
+            err[field.name] = rules.required.message;
+            return;
+          }
+        } else {
+          if (!value || (typeof value === "string" && value.trim() === "")) {
+            err[field.name] = rules.required.message;
+            return;
+          }
+        }
       }
-      if (!value) return;
+
+      // Skip other validations if value is empty and not required
+      if (!value && !rules.required?.value) return;
+
+      // Pattern validation
       if (rules.pattern?.value && !rules.pattern.value.test(value)) {
         err[field.name] = rules.pattern.message;
         return;
       }
+
+      // Min/Max validation for numbers
+      if (field.type === "number") {
+        const numValue = Number(value);
+        if (rules.min !== undefined && numValue < rules.min) {
+          err[field.name] = rules.minMessage || `Minimum value is ${rules.min}`;
+          return;
+        }
+        if (rules.max !== undefined && numValue > rules.max) {
+          err[field.name] = rules.maxMessage || `Maximum value is ${rules.max}`;
+          return;
+        }
+      }
+
+      // Custom validation
       if (rules.custom) {
         const msg = rules.custom(value);
         if (msg) err[field.name] = msg;
       }
     });
+
     setErrors(err);
     return Object.keys(err).length === 0;
   };
@@ -102,8 +141,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
 
   const renderField = (field: FieldConfig) => {
     const hasError = !!errors[field.name];
-    const isDisabled = field.disabled || false;
+    const isDisabled = field.disabled || disabled || isSubmitting;
     const errorId = `${field.name}-error`;
+    const helperId = `${field.name}-helper`;
 
     return (
       <Field className='mb-4' key={field.name}>
@@ -111,15 +151,26 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
           field.type !== "checkbox" &&
           field.type !== "switch" && (
             <FieldLabel htmlFor={field.name}>
-              {field.label}
-              {field.validation?.required?.value && (
-                <span className='text-destructive'> *</span>
-              )}
+              <div className='flex items-center gap-2'>
+                {field.icon && <field.icon className='h-4 w-4' />}
+                <span>
+                  {field.label}
+                  {field.validation?.required?.value && (
+                    <span className='text-destructive'> *</span>
+                  )}
+                </span>
+              </div>
             </FieldLabel>
           )}
+
+        {field.helperText && !hasError && (
+          <p id={helperId} className='text-sm text-muted-foreground mb-2'>
+            {field.helperText}
+          </p>
+        )}
+
         {(field.type === "text" ||
           field.type === "email" ||
-          field.type === "number" ||
           field.type === "password") && (
           <Input
             id={field.name}
@@ -130,9 +181,30 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             className={hasError ? "border-destructive" : ""}
             disabled={isDisabled}
             aria-invalid={hasError}
-            aria-describedby={hasError ? errorId : undefined}
+            aria-describedby={
+              hasError ? errorId : field.helperText ? helperId : undefined
+            }
           />
         )}
+
+        {field.type === "number" && (
+          <Input
+            id={field.name}
+            type='number'
+            placeholder={field.placeholder}
+            value={formData[field.name]}
+            onChange={e => handleChange(field.name, e.target.value)}
+            className={hasError ? "border-destructive" : ""}
+            disabled={isDisabled}
+            min={field.validation?.min}
+            max={field.validation?.max}
+            aria-invalid={hasError}
+            aria-describedby={
+              hasError ? errorId : field.helperText ? helperId : undefined
+            }
+          />
+        )}
+
         {field.type === "textarea" && (
           <Textarea
             id={field.name}
@@ -141,10 +213,14 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             onChange={e => handleChange(field.name, e.target.value)}
             className={hasError ? "border-destructive" : ""}
             disabled={isDisabled}
+            rows={field.rows || 4}
             aria-invalid={hasError}
-            aria-describedby={hasError ? errorId : undefined}
+            aria-describedby={
+              hasError ? errorId : field.helperText ? helperId : undefined
+            }
           />
         )}
+
         {field.type === "select" && (
           <Select
             onValueChange={v => handleChange(field.name, v)}
@@ -156,7 +232,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
               id={field.name}
               className={hasError ? "border-destructive" : ""}
               aria-invalid={hasError}
-              aria-describedby={hasError ? errorId : undefined}
+              aria-describedby={
+                hasError ? errorId : field.helperText ? helperId : undefined
+              }
             >
               <SelectValue
                 placeholder={field.placeholder || "Select an option"}
@@ -171,15 +249,18 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             </SelectContent>
           </Select>
         )}
+
         {field.type === "radio" && (
           <RadioGroup
             onValueChange={v => handleChange(field.name, v)}
             value={formData[field.name]}
             disabled={isDisabled}
             aria-invalid={hasError}
-            aria-describedby={hasError ? errorId : undefined}
+            aria-describedby={
+              hasError ? errorId : field.helperText ? helperId : undefined
+            }
           >
-            <div className='flex flex-row items-center space-x-6'>
+            <div className='flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-6'>
               {field.options?.map(opt => (
                 <div key={opt.value} className='flex items-center space-x-2'>
                   <RadioGroupItem
@@ -195,32 +276,70 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
             </div>
           </RadioGroup>
         )}
+
         {field.type === "checkbox" && (
-          <div className='flex items-center space-x-2'>
+          <div className='flex items-start space-x-2'>
             <Checkbox
               id={field.name}
               checked={!!formData[field.name]}
               onCheckedChange={v => handleChange(field.name, v)}
               disabled={isDisabled}
               aria-invalid={hasError}
-              aria-describedby={hasError ? errorId : undefined}
+              aria-describedby={
+                hasError ? errorId : field.helperText ? helperId : undefined
+              }
+              className='mt-1'
             />
-            <Label htmlFor={field.name}>{field.label}</Label>
+            <div className='grid gap-1.5 leading-none'>
+              <Label
+                htmlFor={field.name}
+                className='text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70'
+              >
+                {field.label}
+                {field.validation?.required?.value && (
+                  <span className='text-destructive'> *</span>
+                )}
+              </Label>
+              {field.helperText && !hasError && (
+                <p className='text-sm text-muted-foreground'>
+                  {field.helperText}
+                </p>
+              )}
+            </div>
           </div>
         )}
+
         {field.type === "switch" && (
-          <div className='flex items-center space-x-2'>
+          <div className='flex items-center justify-between space-x-2'>
+            <div className='grid gap-1.5 leading-none'>
+              <Label
+                htmlFor={field.name}
+                className='text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70'
+              >
+                {field.label}
+                {field.validation?.required?.value && (
+                  <span className='text-destructive'> *</span>
+                )}
+              </Label>
+              {field.helperText && !hasError && (
+                <p className='text-sm text-muted-foreground'>
+                  {field.helperText}
+                </p>
+              )}
+            </div>
             <Switch
               id={field.name}
               checked={!!formData[field.name]}
               onCheckedChange={v => handleChange(field.name, v)}
               disabled={isDisabled}
               aria-invalid={hasError}
-              aria-describedby={hasError ? errorId : undefined}
+              aria-describedby={
+                hasError ? errorId : field.helperText ? helperId : undefined
+              }
             />
-            <Label htmlFor={field.name}>{field.label}</Label>
           </div>
         )}
+
         {errors[field.name] && (
           <p
             id={errorId}
@@ -234,9 +353,9 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
     );
   };
 
-  return (
-    <Card className={cn("", formClassName)}>
-      {headerField && (
+  const formContent = (
+    <>
+      {headerField && showCard && (
         <>
           <CardHeader>
             <CardTitle className='text-2xl font-bold'>
@@ -249,34 +368,50 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({
           <Separator />
         </>
       )}
-      <CardContent>
-        <FieldGroup className={cn("", formFieldsClassName)}>
-          {formFields.map(renderField)}
-        </FieldGroup>
-      </CardContent>
+
+      <div className={showCard ? "" : ""}>
+        <CardContent className={showCard ? "" : "p-0"}>
+          <FieldGroup className={cn("", formFieldsClassName)}>
+            {formFields.map(renderField)}
+          </FieldGroup>
+        </CardContent>
+      </div>
+
       {buttons.length > 0 && (
         <>
-          <Separator />
-          <CardFooter className={cn("", formButtonClassName)}>
+          {showCard && <Separator />}
+          <CardFooter
+            className={cn(showCard ? "" : "p-0 pt-4", formButtonClassName)}
+          >
             {buttons.map((btn, idx) => (
               <Button
                 key={idx}
                 variant={btn.variant || "default"}
                 type='button'
+                disabled={isSubmitting || disabled}
                 onClick={() => {
                   if (btn.type === "submit") handleSubmit();
-                  else if (btn.label.toLowerCase() === "reset") resetForm();
+                  else if (btn.type === "reset") resetForm();
                   else btn.onClick?.(formData);
                 }}
               >
+                {isSubmitting && btn.type === "submit" && (
+                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                )}
                 {btn.label}
               </Button>
             ))}
           </CardFooter>
         </>
       )}
-    </Card>
+    </>
   );
+
+  if (!showCard) {
+    return <div className={cn("w-full", formClassName)}>{formContent}</div>;
+  }
+
+  return <Card className={cn("", formClassName)}>{formContent}</Card>;
 };
 
 export default DynamicForm;

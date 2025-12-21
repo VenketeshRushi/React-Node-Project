@@ -7,6 +7,8 @@ interface DynamicTabsProps {
   tabs: TabItem[];
   defaultTabId?: string;
   tabClassName?: string;
+  tabsListClassName?: string;
+  tabsContentClassName?: string;
   onTabChange?: (tabId: string) => void;
 }
 
@@ -14,28 +16,34 @@ export const DynamicTabs: React.FC<DynamicTabsProps> = ({
   tabs,
   defaultTabId,
   tabClassName,
+  tabsListClassName,
+  tabsContentClassName,
   onTabChange,
 }) => {
+  if (!tabs || tabs.length === 0) {
+    return null;
+  }
+
   return (
     <Tabs
       defaultValue={defaultTabId || tabs[0]?.id}
-      className={cn("", tabClassName)}
+      className={cn("w-full", tabClassName)}
       onValueChange={onTabChange}
     >
-      <TabsList className='flex space-x-4 border-b border-primary-200 mb-4 px-2'>
+      <TabsList className={cn("w-full justify-start", tabsListClassName)}>
         {tabs.map(tab => (
-          <TabsTrigger
-            key={tab.id}
-            value={tab.id}
-            className='cursor-pointer px-2 py-2'
-          >
+          <TabsTrigger key={tab.id} value={tab.id} disabled={tab.disabled}>
             {tab.label}
           </TabsTrigger>
         ))}
       </TabsList>
 
       {tabs.map(tab => (
-        <TabsContent key={tab.id} value={tab.id}>
+        <TabsContent
+          key={tab.id}
+          value={tab.id}
+          className={cn("mt-4", tabsContentClassName)}
+        >
           {tab.content}
         </TabsContent>
       ))}

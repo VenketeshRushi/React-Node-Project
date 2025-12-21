@@ -22,31 +22,36 @@ import { authenticateToken } from '@/middlewares/authenticateToken.middleware.js
 
 const userRouter: Router = Router();
 
-// Current user endpoint
-userRouter.get('/me', authenticateToken, getCurrentUserController);
+userRouter.get(
+  '/me',
+  authenticateToken,
+  rateLimiter('api'),
+  getCurrentUserController
+);
 
 userRouter.put(
   '/me',
-  authenticateToken,
   validateBody(updateUserBodySchema),
+  authenticateToken,
+  rateLimiter('api'),
   updateCurrentUserController
 );
 
-// Admin endpoints
 userRouter.get(
   '/',
+  validateQuery(getUsersQuerySchema),
   authenticateToken,
   authorizeRoles(['admin', 'superadmin']),
   rateLimiter('api'),
-  validateQuery(getUsersQuerySchema),
   getUsersController
 );
 
 userRouter.get(
   '/:userId',
-  authenticateToken,
   validateParams(getUserByIdParamsSchema),
+  authenticateToken,
   authorizeRoles(['admin', 'superadmin']),
+  rateLimiter('api'),
   getUserByIdController
 );
 

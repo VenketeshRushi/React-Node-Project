@@ -1,3 +1,5 @@
+import { type LucideIcon } from "lucide-react";
+
 export interface FieldOption {
   label: string;
   value: string;
@@ -20,10 +22,17 @@ export interface FieldConfig {
   title?: string;
   subtitle?: string;
   placeholder?: string;
+  helperText?: string;
+  icon?: LucideIcon;
   options?: FieldOption[];
+  rows?: number;
   validation?: {
     required?: { value: boolean; message: string };
     pattern?: { value: RegExp; message: string };
+    min?: number;
+    max?: number;
+    minMessage?: string;
+    maxMessage?: string;
     custom?: (value: any) => string | null;
   };
   defaultValue?: any;
@@ -33,6 +42,6 @@ export interface FieldConfig {
 export interface ButtonConfig {
   label: string;
   variant?: "default" | "outline" | "secondary" | "destructive";
-  type?: "submit" | "button";
+  type?: "submit" | "reset" | "button";
   onClick?: (data: any) => void;
 }

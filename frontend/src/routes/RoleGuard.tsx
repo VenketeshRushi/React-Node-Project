@@ -1,20 +1,25 @@
 import { Navigate } from "react-router-dom";
-import { useAuthStore } from "@/stores/auth.store";
+import { useUser } from "@/stores/auth.store";
 
 interface RoleGuardProps {
   allowedRoles: Array<"user" | "admin" | "superadmin">;
   children: React.ReactNode;
+  fallbackPath?: string;
 }
 
-const RoleGuard = ({ allowedRoles, children }: RoleGuardProps) => {
-  const user = useAuthStore(state => state.user);
+const RoleGuard = ({
+  allowedRoles,
+  children,
+  fallbackPath = "/dashboard",
+}: RoleGuardProps) => {
+  const user = useUser();
 
   if (!user) {
     return <Navigate to='/login' replace />;
   }
 
   if (!allowedRoles.includes(user.role)) {
-    return <Navigate to='/dashboard' replace />;
+    return <Navigate to={fallbackPath} replace />;
   }
 
   return <>{children}</>;

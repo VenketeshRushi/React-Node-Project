@@ -8,8 +8,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 interface DynamicDialogProps {
   open: boolean;
@@ -20,6 +20,7 @@ interface DynamicDialogProps {
   children?: React.ReactNode;
   footer?: React.ReactNode;
   dialogClassName?: string;
+  contentClassName?: string;
 }
 
 export const DynamicDialog: React.FC<DynamicDialogProps> = ({
@@ -31,20 +32,35 @@ export const DynamicDialog: React.FC<DynamicDialogProps> = ({
   children,
   footer,
   dialogClassName,
+  contentClassName,
 }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
 
-      <DialogContent className={cn("sm:max-w-lg w-full", dialogClassName)}>
-        <DialogHeader>
-          {title && <DialogTitle>{title}</DialogTitle>}
-          {description && <DialogDescription>{description}</DialogDescription>}
-        </DialogHeader>
+      <DialogContent
+        className={cn(
+          "sm:max-w-lg max-h-[90vh] flex flex-col",
+          dialogClassName
+        )}
+      >
+        {(title || description) && (
+          <>
+            <DialogHeader>
+              {title && <DialogTitle>{title}</DialogTitle>}
+              {description && (
+                <DialogDescription>{description}</DialogDescription>
+              )}
+            </DialogHeader>
+            <Separator className='my-2' />
+          </>
+        )}
 
-        <Separator className='my-2' />
-
-        <div className='py-2'>{children}</div>
+        {children && (
+          <div className={cn("flex-1 overflow-y-auto", contentClassName)}>
+            {children}
+          </div>
+        )}
 
         {footer && (
           <>

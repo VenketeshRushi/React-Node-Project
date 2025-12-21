@@ -10,20 +10,30 @@ import { authenticateToken } from '@/middlewares/authenticateToken.middleware.js
 
 const authRouter: Router = Router();
 
-// OAuth Login
+// Google OAuth 2.0 With PKCE
 authRouter.post(
   '/google/callback',
   rateLimiter('auth'),
   googleAuthCodeController
 );
 
-// Refresh Token Management
+// Refresh token
 authRouter.post('/refresh', rateLimiter('auth'), refreshTokenController);
 
-// Logout
-authRouter.post('/logout', logoutController);
+// Logout (protected)
+authRouter.post(
+  '/logout',
+  authenticateToken,
+  rateLimiter('auth'),
+  logoutController
+);
 
-// Logout from all devices
-authRouter.post('/logout/all', authenticateToken, logoutAllDevicesController);
+// Logout all devices
+authRouter.post(
+  '/logout/all',
+  authenticateToken,
+  rateLimiter('auth'),
+  logoutAllDevicesController
+);
 
 export default authRouter;
