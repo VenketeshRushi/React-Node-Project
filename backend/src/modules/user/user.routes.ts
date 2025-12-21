@@ -16,12 +16,12 @@ import {
   getUsersQuerySchema,
   updateUserBodySchema,
 } from './user.schemas.js';
-
 import { authorizeRoles } from '@/middlewares/authorizeRoles.middleware.js';
 import { authenticateToken } from '@/middlewares/authenticateToken.middleware.js';
 
 const userRouter: Router = Router();
 
+// Current user routes
 userRouter.get(
   '/me',
   authenticateToken,
@@ -31,27 +31,28 @@ userRouter.get(
 
 userRouter.put(
   '/me',
-  validateBody(updateUserBodySchema),
   authenticateToken,
   rateLimiter('api'),
+  validateBody(updateUserBodySchema),
   updateCurrentUserController
 );
 
+// Admin routes
 userRouter.get(
   '/',
-  validateQuery(getUsersQuerySchema),
   authenticateToken,
   authorizeRoles(['admin', 'superadmin']),
   rateLimiter('api'),
+  validateQuery(getUsersQuerySchema),
   getUsersController
 );
 
 userRouter.get(
   '/:userId',
-  validateParams(getUserByIdParamsSchema),
   authenticateToken,
   authorizeRoles(['admin', 'superadmin']),
   rateLimiter('api'),
+  validateParams(getUserByIdParamsSchema),
   getUserByIdController
 );
 

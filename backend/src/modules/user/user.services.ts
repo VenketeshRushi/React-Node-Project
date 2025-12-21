@@ -1,7 +1,8 @@
-import { and, eq, ilike, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, or } from 'drizzle-orm';
 import { db } from '@/database/connection.js';
 import { usersTable } from '@/models/users.model.js';
 import { NotFoundError } from '@/utils/CustomError.js';
+import { UserWithoutPassword } from '@/types/auth.types.js';
 
 interface GetUsersOptions {
   page: number;
@@ -11,11 +12,48 @@ interface GetUsersOptions {
   search?: string;
 }
 
+interface UpdateUserPayload {
+  name?: string;
+  mobile_no?: string;
+  onboarding?: boolean;
+  profession?: string | null;
+  company?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  avatar_url?: string | null;
+  timezone?: string | null;
+  language?: string | null;
+}
+
+const userPublicSelect = {
+  id: usersTable.id,
+  name: usersTable.name,
+  email: usersTable.email,
+  onboarding: usersTable.onboarding,
+  profession: usersTable.profession,
+  company: usersTable.company,
+  address: usersTable.address,
+  city: usersTable.city,
+  state: usersTable.state,
+  country: usersTable.country,
+  avatar_url: usersTable.avatar_url,
+  timezone: usersTable.timezone,
+  language: usersTable.language,
+  login_method: usersTable.login_method,
+  role: usersTable.role,
+  is_active: usersTable.is_active,
+  is_banned: usersTable.is_banned,
+  created_at: usersTable.created_at,
+  updated_at: usersTable.updated_at,
+};
+
 export async function getUsersService(options: GetUsersOptions) {
   const { page, limit, role, is_active, search } = options;
   const offset = (page - 1) * limit;
 
-  const conditions = [];
+  const conditions: Parameters<typeof and>[0][] = [];
 
   if (role) {
     conditions.push(eq(usersTable.role, role));
@@ -26,76 +64,70 @@ export async function getUsersService(options: GetUsersOptions) {
   }
 
   if (search) {
-    conditions.push(ilike(usersTable.name, `%${search}%`));
+    conditions.push(
+      or(
+        ilike(usersTable.name, `%${search}%`),
+        ilike(usersTable.email, `%${search}%`)
+      )
+    );
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = conditions.length ? and(...conditions) : undefined;
 
   const [users, countResult] = await Promise.all([
     db
-      .select({
-        id: usersTable.id,
-        name: usersTable.name,
-        email: usersTable.email,
-        role: usersTable.role,
-        onboarding: usersTable.onboarding,
-        is_active: usersTable.is_active,
-        created_at: usersTable.created_at,
-      })
+      .select(userPublicSelect)
       .from(usersTable)
       .where(whereClause)
       .limit(limit)
       .offset(offset)
-      .orderBy(usersTable.created_at),
+      .orderBy(desc(usersTable.created_at)),
 
-    db
-      .select({
-        count: sql<number>`count(*)`,
-      })
-      .from(usersTable)
-      .where(whereClause),
+    db.select({ count: count() }).from(usersTable).where(whereClause),
   ]);
 
-  const totalCount = countResult[0]?.count ?? 0;
+  const total = Number(countResult[0]?.count ?? 0);
 
   return {
     data: users,
     pagination: {
       page,
       limit,
-      total: Number(totalCount),
-      totalPages: Math.ceil(Number(totalCount) / limit),
+      total,
+      totalPages: Math.ceil(total / limit),
     },
   };
 }
 
-export async function getUserByIdService(userId: string) {
-  const user = await db
-    .select()
+export async function getUserByIdService(
+  userId: string
+): Promise<UserWithoutPassword> {
+  const [user] = await db
+    .select(userPublicSelect)
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
 
-  if (!user.length) {
+  if (!user) {
     throw new NotFoundError('User not found');
   }
 
-  return user[0];
+  return user;
 }
 
 export async function updateUserByIdService(
   userId: string,
-  payload: Partial<typeof usersTable.$inferInsert>
-) {
-  const updated = await db
+  payload: UpdateUserPayload
+): Promise<UserWithoutPassword> {
+  const [updated] = await db
     .update(usersTable)
     .set(payload)
     .where(eq(usersTable.id, userId))
-    .returning();
+    .returning(userPublicSelect);
 
-  if (!updated.length) {
+  if (!updated) {
     throw new NotFoundError('User not found');
   }
 
-  return updated[0];
+  return updated;
 }

@@ -19,6 +19,7 @@ export const getUserByIdParamsSchema = z.object({
 export const updateUserBodySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   mobile_no: z.string().max(15).optional(),
+  onboarding: z.boolean().optional(),
   profession: z.string().max(100).optional(),
   company: z.string().max(150).optional(),
   address: z.string().max(255).optional(),
@@ -27,5 +28,5 @@ export const updateUserBodySchema = z.object({
   country: z.string().max(100).optional(),
   timezone: z.string().max(50).optional(),
   language: z.string().max(10).optional(),
-  avatar_url: z.string().url().optional(),
+  avatar_url: z.string().url().max(500).optional(),
 });

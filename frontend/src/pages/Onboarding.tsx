@@ -4,6 +4,7 @@ import { DynamicForm } from "@/components/dynamic-form/DynamicForm";
 import type { ButtonConfig, FieldConfig } from "@/interface/DynamicForm";
 import { useAuthStore, useUser } from "@/stores/auth.store";
 import { useToast } from "@/hooks/use-toast";
+import { Spinner } from "@/components/ui/spinner";
 
 const INDIAN_STATES_AND_UTS = [
   { label: "Andhra Pradesh", value: "Andhra Pradesh" },
@@ -145,16 +146,39 @@ function Onboarding() {
           placeholder: "Enter your name",
           defaultValue: user.name || "",
           helperText: "This is your display name across the platform",
+          disabled: true,
           validation: {
             required: { value: true, message: "Name is required" },
+          },
+        },
+        {
+          name: "email",
+          label: "Email Address",
+          type: "email",
+          placeholder: "your@email.com",
+          defaultValue: user.email || "",
+          helperText: "Your registered email address",
+          disabled: true,
+          validation: {
+            required: { value: true, message: "Email is required" },
+          },
+        },
+        {
+          name: "mobile_no",
+          label: "Mobile Number",
+          type: "number",
+          placeholder: "10-digit mobile number",
+          defaultValue: "",
+          helperText: "Enter your 10-digit mobile number",
+          validation: {
+            required: { value: true, message: "Mobile number is required" },
             custom: (value: string) => {
-              if (value && value.length < 3) {
-                return "Name must be at least 3 characters";
+              if (value && !/^[6-9]\d{9}$/.test(value)) {
+                return "Please enter a valid 10-digit Indian mobile number";
               }
               return null;
             },
           },
-          disabled: true,
         },
         {
           name: "profession",
@@ -288,9 +312,8 @@ function Onboarding() {
     try {
       setIsSubmitting(true);
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      updateUser({
+      await updateUser({
+        mobile_no: data.mobile_no,
         profession: data.profession,
         company: data.company,
         address: data.address,
@@ -307,6 +330,7 @@ function Onboarding() {
       navigate("/dashboard", { replace: true });
     } catch (error) {
       console.error("Onboarding failed:", error);
+      errorToast("Failed to complete profile. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -314,17 +338,14 @@ function Onboarding() {
 
   if (!user || formFields.length === 0) {
     return (
-      <div className='flex items-center justify-center min-h-screen'>
-        <div className='text-center space-y-2'>
-          <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto' />
-          <p className='text-sm text-muted-foreground'>Loading...</p>
-        </div>
+      <div className='flex items-center justify-center flex-1'>
+        <Spinner />
       </div>
     );
   }
 
   return (
-    <div className='container mx-auto p-6 max-w-4xl'>
+    <div className='container mx-auto p-6 max-w-6xl py-16'>
       <DynamicForm
         fields={formFields}
         buttons={buttons}

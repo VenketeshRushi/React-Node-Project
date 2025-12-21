@@ -6,28 +6,19 @@ export interface UserWithoutPassword {
   id: string;
   name: string;
   email: string;
-  mobile_no?: string | null;
 
   onboarding: boolean;
 
   profession?: string | null;
-  job_title?: string | null;
-  department?: string | null;
   company?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
   country?: string | null;
-  work_phone?: string | null;
-  alternate_email?: string | null;
-
-  pronouns?: string | null;
-  linkedin_url?: string | null;
-  bio?: string | null;
 
   avatar_url?: string | null;
-  timezone?: string;
-  language?: string;
+  timezone?: string | null;
+  language?: string | null;
 
   login_method: LoginMethod;
   role: UserRole;
