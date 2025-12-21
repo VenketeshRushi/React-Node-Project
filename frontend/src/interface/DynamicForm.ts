@@ -17,7 +17,9 @@ export interface FieldConfig {
     | "select"
     | "radio"
     | "checkbox"
-    | "switch";
+    | "switch"
+    | "slider"
+    | "date";
   label?: string;
   title?: string;
   subtitle?: string;
@@ -26,6 +28,7 @@ export interface FieldConfig {
   icon?: LucideIcon;
   options?: FieldOption[];
   rows?: number;
+  orientation?: "horizontal" | "vertical";
   validation?: {
     required?: { value: boolean; message: string };
     pattern?: { value: RegExp; message: string };
@@ -37,11 +40,24 @@ export interface FieldConfig {
   };
   defaultValue?: any;
   disabled?: boolean;
+  // Slider specific
+  step?: number;
+  showValue?: boolean;
+  // Date specific
+  dateFormat?: string;
+  disablePastDates?: boolean;
+  disableFutureDates?: boolean;
 }
 
 export interface ButtonConfig {
   label: string;
-  variant?: "default" | "outline" | "secondary" | "destructive";
+  variant?:
+    | "default"
+    | "outline"
+    | "secondary"
+    | "destructive"
+    | "ghost"
+    | "link";
   type?: "submit" | "reset" | "button";
   onClick?: (data: any) => void;
 }
