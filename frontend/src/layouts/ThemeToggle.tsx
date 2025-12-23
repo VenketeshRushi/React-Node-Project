@@ -26,43 +26,26 @@ export function ThemeToggle({ className }: { className?: string }) {
     typeof document !== "undefined" && "startViewTransition" in document;
 
   function applyThemeWithAnimation(newTheme: Theme) {
-    if (!buttonRef.current || !supportsViewTransitions()) {
+    if (!supportsViewTransitions() || !buttonRef.current) {
       setTheme(newTheme);
       return;
     }
 
     try {
-      // startViewTransition typing workaround
-      const transition = (document as unknown as Document).startViewTransition(
-        () => {
-          setTheme(newTheme);
-        }
-      );
+      const { top, left, width, height } =
+        buttonRef.current.getBoundingClientRect();
+      const x = left + width / 2;
+      const y = top + height / 2;
 
-      transition.ready.then(() => {
-        const { top, left, width, height } =
-          buttonRef.current!.getBoundingClientRect();
-        const x = left + width / 2;
-        const y = top + height / 2;
+      document.documentElement.style.setProperty("--x", `${x}px`);
+      document.documentElement.style.setProperty("--y", `${y}px`);
 
-        const maxRadius = Math.hypot(
-          Math.max(x, window.innerWidth - x),
-          Math.max(y, window.innerHeight - y)
-        );
+      const transition = (document as any).startViewTransition(() => {
+        setTheme(newTheme);
+      });
 
-        document.documentElement.animate(
-          {
-            clipPath: [
-              `circle(0px at ${x}px ${y}px)`,
-              `circle(${maxRadius}px at ${x}px ${y}px)`,
-            ],
-          },
-          {
-            duration: 700,
-            easing: "ease-in-out",
-            pseudoElement: "::view-transition-new(root)",
-          }
-        );
+      transition.ready.catch(() => {
+        setTheme(newTheme);
       });
     } catch {
       setTheme(newTheme);

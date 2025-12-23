@@ -18,7 +18,7 @@ export function NavMain({ projects }: { projects: any }) {
         const Icon = item.icon;
 
         return (
-          <SidebarMenuItem key={item.name} className='px-2'>
+          <SidebarMenuItem key={item.name} className='px-2 py-1'>
             <SidebarMenuButton asChild isActive={isActive}>
               <Link to={item.url}>
                 {Icon && <Icon />}

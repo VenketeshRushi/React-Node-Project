@@ -1,19 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import {
-  BadgePercent,
-  DollarSign,
-  Menu,
-  ShoppingCart,
-  Cpu,
-  LayoutGrid,
-} from "lucide-react";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
@@ -22,7 +9,6 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
   NavigationMenuTrigger,
-  navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 import {
   Sheet,
@@ -35,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./ThemeToggle";
 import GenieLogo from "./GenieLogo";
+import { throttle } from "@/utils/ext";
 
 interface MenuItem {
   title: string;
@@ -53,52 +40,187 @@ interface NavbarProps {
 }
 
 const defaultMenu: MenuItem[] = [
-  {
-    title: "Platform",
-    url: "/",
-    items: [
-      {
-        title: "Genie",
-        description: "Advanced reasoning engine for complex tasks.",
-        icon: <Cpu className='size-5 shrink-0 text-primary' />,
-        url: "/",
-      },
-      {
-        title: "Resource Grid",
-        description: "Manage compute and allocation.",
-        icon: <LayoutGrid className='size-5 shrink-0 text-blue-500' />,
-        url: "/",
-      },
-    ],
-  },
-  {
-    title: "Pricing",
-    url: "/#pricing",
-    items: [
-      {
-        title: "Protocol: Free",
-        description: "For individuals starting out.",
-        icon: <ShoppingCart className='size-5 shrink-0 text-emerald-500' />,
-        url: "/#pricing",
-      },
-      {
-        title: "Protocol: Startup",
-        description: "For scaling teams.",
-        icon: <DollarSign className='size-5 shrink-0 text-blue-500' />,
-        url: "/#pricing",
-      },
-      {
-        title: "Protocol: Enterprise",
-        description: "Enterprise grade infrastructure.",
-        icon: <BadgePercent className='size-5 shrink-0 text-primary' />,
-        url: "/#pricing",
-      },
-    ],
-  },
   { title: "About Us", url: "/about" },
   { title: "Contact Us", url: "/contact" },
   { title: "FAQ", url: "/faq" },
 ];
+
+const isPathActive = (itemUrl: string, currentPath: string): boolean => {
+  if (itemUrl === "/" && currentPath === "/") return true;
+  if (itemUrl !== "/" && currentPath.startsWith(itemUrl)) return true;
+  return false;
+};
+
+interface DesktopMenuItemProps {
+  item: MenuItem;
+  isActive: boolean;
+}
+
+const DesktopMenuItem = React.memo(
+  ({ item, isActive }: DesktopMenuItemProps) => {
+    if (item.items) {
+      return (
+        <NavigationMenuItem>
+          <NavigationMenuTrigger
+            className={cn(
+              "h-10 px-4 rounded-full transition-colors",
+              isActive
+                ? "text-foreground bg-accent"
+                : "text-muted-foreground bg-transparent hover:text-foreground hover:bg-accent/70"
+            )}
+          >
+            {item.title}
+          </NavigationMenuTrigger>
+          <NavigationMenuContent className='bg-popover backdrop-blur-xl rounded-xl border shadow-lg p-2 w-[320px]'>
+            <ul className='grid gap-1'>
+              {item.items.map(subItem => (
+                <li key={subItem.title}>
+                  <NavigationMenuLink asChild>
+                    <Link
+                      to={subItem.url}
+                      className='flex items-start gap-3 rounded-lg p-3 transition-colors hover:bg-accent focus:bg-accent focus:outline-none'
+                    >
+                      {subItem.icon && (
+                        <div className='shrink-0 mt-0.5'>{subItem.icon}</div>
+                      )}
+                      <div className='flex flex-col gap-1'>
+                        <div className='text-sm font-medium text-foreground'>
+                          {subItem.title}
+                        </div>
+                        {subItem.description && (
+                          <p className='text-xs text-muted-foreground leading-relaxed'>
+                            {subItem.description}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  </NavigationMenuLink>
+                </li>
+              ))}
+            </ul>
+          </NavigationMenuContent>
+        </NavigationMenuItem>
+      );
+    }
+
+    return (
+      <NavigationMenuItem>
+        <NavigationMenuLink asChild>
+          <Link
+            to={item.url}
+            className={cn(
+              "inline-flex items-center justify-center h-10 px-4 rounded-full text-sm font-medium transition-colors focus:outline-none disabled:pointer-events-none disabled:opacity-50",
+              isActive
+                ? "text-foreground bg-accent"
+                : "text-muted-foreground bg-transparent hover:text-foreground hover:bg-accent/70"
+            )}
+          >
+            {item.title}
+          </Link>
+        </NavigationMenuLink>
+      </NavigationMenuItem>
+    );
+  }
+);
+
+DesktopMenuItem.displayName = "DesktopMenuItem";
+
+interface MobileMenuItemProps {
+  item: MenuItem;
+  isActive: boolean;
+  onNavigate: () => void;
+}
+
+const MobileMenuItem = React.memo(
+  ({ item, isActive, onNavigate }: MobileMenuItemProps) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    if (item.items) {
+      return (
+        <div className='border-b border-border'>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            aria-expanded={isOpen}
+            aria-controls={`mobile-submenu-${item.title}`}
+            className={cn(
+              "w-full flex items-center justify-between py-4 text-left text-base font-medium transition-colors",
+              isActive
+                ? "text-primary font-semibold"
+                : "text-foreground hover:text-primary"
+            )}
+          >
+            {item.title}
+            <svg
+              className={cn(
+                "size-4 transition-transform duration-200",
+                isOpen && "rotate-180"
+              )}
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'
+            >
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M19 9l-7 7-7-7'
+              />
+            </svg>
+          </button>
+          {isOpen && (
+            <div
+              id={`mobile-submenu-${item.title}`}
+              className='flex flex-col gap-1 pb-4 pl-2'
+            >
+              {item.items.map(subItem => (
+                <SheetClose asChild key={subItem.title}>
+                  <Link
+                    to={subItem.url}
+                    onClick={onNavigate}
+                    className='flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors focus:outline-2 focus:outline-ring min-h-[44px]'
+                  >
+                    <div className='text-muted-foreground shrink-0 mt-0.5'>
+                      {subItem.icon}
+                    </div>
+                    <div className='flex flex-col gap-1'>
+                      <div className='text-foreground font-medium text-sm'>
+                        {subItem.title}
+                      </div>
+                      {subItem.description && (
+                        <div className='text-xs text-muted-foreground leading-snug'>
+                          {subItem.description}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                </SheetClose>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <SheetClose asChild>
+        <Link
+          to={item.url}
+          onClick={onNavigate}
+          className={cn(
+            "flex items-center py-4 text-base font-medium border-b border-border transition-colors min-h-[44px]",
+            isActive
+              ? "text-primary font-semibold"
+              : "text-foreground hover:text-primary"
+          )}
+        >
+          {item.title}
+        </Link>
+      </SheetClose>
+    );
+  }
+);
+
+MobileMenuItem.displayName = "MobileMenuItem";
 
 const Navbar = ({
   logo = { url: "/", title: "Genie" },
@@ -107,132 +229,140 @@ const Navbar = ({
     googlelogin: { title: "Login", url: "/login" },
   },
 }: NavbarProps) => {
+  const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
-  // Scroll effect for glassmorphism intensity
+  const handleScroll = useMemo(
+    () =>
+      throttle(() => {
+        setScrolled(window.scrollY > 50);
+      }, 100),
+    []
+  );
+
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
+
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
+
+  const handleMobileMenuClose = useCallback(() => {
+    setIsOpen(false);
   }, []);
 
+  const desktopMenuItems = useMemo(
+    () =>
+      menu.map(item => (
+        <DesktopMenuItem
+          key={item.title}
+          item={item}
+          isActive={isPathActive(item.url, location.pathname)}
+        />
+      )),
+    [menu, location.pathname]
+  );
+
+  const mobileMenuItems = useMemo(
+    () =>
+      menu.map(item => (
+        <MobileMenuItem
+          key={item.title}
+          item={item}
+          isActive={isPathActive(item.url, location.pathname)}
+          onNavigate={handleMobileMenuClose}
+        />
+      )),
+    [menu, location.pathname, handleMobileMenuClose]
+  );
+
   return (
-    <div className='fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4'>
-      <nav
-        className={cn(
-          "w-full max-w-6xl rounded-2xl border transition-all duration-300 ease-in-out",
-          scrolled
-            ? "bg-background/80 backdrop-blur-xl shadow-2xl py-2 px-6"
-            : "bg-transparent border-transparent py-4 px-4"
-        )}
+    <>
+      <Link
+        to='#main-content'
+        className='sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-60 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md'
       >
-        <div className='flex items-center justify-between'>
-          {/* Logo Section */}
-          <Link to={logo.url} className='flex items-center gap-2 group'>
-            <div className='relative flex h-9 w-9 items-center justify-center transition-colors'>
-              <GenieLogo size={32} />
-            </div>
-            <span className='text-lg font-bold tracking-tight text-foreground'>
-              {logo.title}
-            </span>
-          </Link>
+        Skip to content
+      </Link>
 
-          {/* Desktop Menu */}
-          <div className='hidden lg:flex items-center gap-2'>
-            <NavigationMenu>
-              <NavigationMenuList>
-                {menu.map(item => (
-                  <NavigationMenuItem key={item.title}>
-                    {item.items ? (
-                      <>
-                        <NavigationMenuTrigger className='bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent focus:bg-accent data-[state=open]:bg-accent data-[state=open]:text-foreground h-9 px-4 rounded-full transition-colors'>
-                          {item.title}
-                        </NavigationMenuTrigger>
-                        <NavigationMenuContent className='bg-popover/95 backdrop-blur-xl rounded-xl p-2 w-lg!'>
-                          <ul className='grid gap-1'>
-                            {item.items.map(subItem => (
-                              <li key={subItem.title}>
-                                <NavigationMenuLink asChild>
-                                  <Link
-                                    to={subItem.url}
-                                    className='hover:bg-muted hover:text-accent-foreground flex select-none flex-row gap-4 rounded-md p-2 leading-none no-underline outline-none transition-colors'
-                                  >
-                                    <div className='text-foreground'>
-                                      {subItem.icon}
-                                    </div>
-                                    <div>
-                                      <div className='text-sm font-semibold'>
-                                        {subItem.title}
-                                      </div>
-                                      {subItem.description && (
-                                        <p className='text-muted-foreground text-sm leading-snug'>
-                                          {subItem.description}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </Link>
-                                </NavigationMenuLink>
-                              </li>
-                            ))}
-                          </ul>
-                        </NavigationMenuContent>
-                      </>
-                    ) : (
-                      <NavigationMenuLink asChild>
-                        <Link
-                          to={item.url}
-                          className={cn(
-                            navigationMenuTriggerStyle(),
-                            "bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent focus:bg-accent h-9 px-4 rounded-full transition-colors"
-                          )}
-                        >
-                          {item.title}
-                        </Link>
-                      </NavigationMenuLink>
-                    )}
-                  </NavigationMenuItem>
-                ))}
-              </NavigationMenuList>
-            </NavigationMenu>
-          </div>
-
-          {/* Right Actions */}
-          <div className='hidden lg:flex items-center gap-4'>
-            <div className='h-6 w-px bg-border' />
-            <ThemeToggle />
-            <Button
-              asChild
-              size='sm'
-              className='rounded-md font-semibold shadow-lg transition-all hover:scale-104'
+      <div className='fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4'>
+        <nav
+          aria-label='Main navigation'
+          className={cn(
+            "w-full rounded-2xl border transition-all duration-500 ease-in-out",
+            scrolled
+              ? "max-w-7xl bg-background/80 backdrop-blur-xl shadow-xl border-border/50 py-3 px-6"
+              : "max-w-full bg-transparent border-transparent py-3 px-4"
+          )}
+        >
+          <div className='flex items-center justify-between gap-4'>
+            <Link
+              to={logo.url}
+              className='flex items-center gap-2 group focus:outline-2 focus:outline-ring rounded-md'
+              aria-label={`${logo.title} home`}
             >
-              <Link
-                to={auth.googlelogin.url}
-                className='flex items-center gap-1 px-2'
-              >
-                {auth.googlelogin.title}
-              </Link>
-            </Button>
-          </div>
+              <div className='relative flex h-9 w-9 items-center justify-center transition-transform group-hover:scale-110'>
+                <GenieLogo size={32} />
+              </div>
+              <span className='text-lg font-bold tracking-tight text-foreground'>
+                {logo.title}
+              </span>
+            </Link>
 
-          {/* Mobile Menu Trigger */}
-          <div className='flex items-center gap-4 lg:hidden'>
-            <ThemeToggle />
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button
-                  variant='outline'
-                  size='icon'
-                  className='rounded-lg'
-                  aria-label='Open menu'
+            <div className='hidden lg:flex items-center gap-2'>
+              <NavigationMenu>
+                <NavigationMenuList>{desktopMenuItems}</NavigationMenuList>
+              </NavigationMenu>
+            </div>
+
+            <div className='hidden lg:flex items-center gap-4'>
+              <div className='h-6 w-px bg-border' aria-hidden='true' />
+              <ThemeToggle />
+              <Button
+                asChild
+                size='sm'
+                className='rounded-lg font-semibold shadow-lg transition-all hover:scale-105 hover:shadow-xl focus:scale-105 focus:shadow-xl min-h-[44px] px-6'
+              >
+                <Link
+                  to={auth.googlelogin.url}
+                  className='flex items-center gap-2'
                 >
-                  <Menu className='size-5' />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side='top' className='w-full h-full p-0'>
-                <div className='flex flex-col h-full'>
-                  <SheetHeader className='p-6 border-b'>
-                    <SheetTitle className='flex items-center gap-2'>
-                      <GenieLogo size={32} />
+                  {auth.googlelogin.title}
+                </Link>
+              </Button>
+            </div>
+
+            <div className='flex items-center gap-3 lg:hidden'>
+              <ThemeToggle />
+              <Sheet open={isOpen} onOpenChange={setIsOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant='outline'
+                    size='icon'
+                    className='rounded-lg min-h-[44px] min-w-[44px]'
+                    aria-label='Open navigation menu'
+                    aria-expanded={isOpen}
+                    aria-controls='mobile-navigation'
+                  >
+                    {isOpen ? (
+                      <X className='size-5' aria-hidden='true' />
+                    ) : (
+                      <Menu className='size-5' aria-hidden='true' />
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent
+                  id='mobile-navigation'
+                  side='right'
+                  className='w-[85vw] max-w-[400px] p-0 flex flex-col'
+                  aria-label='Mobile navigation menu'
+                >
+                  <SheetHeader className='p-6 border-b border-border'>
+                    <SheetTitle className='flex items-center gap-2 text-left'>
+                      <GenieLogo size={28} />
                       <span className='text-xl font-bold text-foreground'>
                         {logo.title}
                       </span>
@@ -240,65 +370,14 @@ const Navbar = ({
                   </SheetHeader>
 
                   <div className='flex-1 overflow-y-auto p-6'>
-                    <Accordion
-                      type='single'
-                      collapsible
-                      className='flex w-full flex-col gap-2'
-                    >
-                      {menu.map(item =>
-                        item.items ? (
-                          <AccordionItem
-                            key={item.title}
-                            value={item.title}
-                            className='border-b'
-                          >
-                            <AccordionTrigger className='text-lg font-medium text-foreground hover:no-underline hover:text-primary py-4'>
-                              {item.title}
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              <div className='flex flex-col gap-2 pb-4 pl-4'>
-                                {item.items.map(subItem => (
-                                  <SheetClose asChild key={subItem.title}>
-                                    <Link
-                                      to={subItem.url}
-                                      className='flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors'
-                                    >
-                                      <div className='text-muted-foreground'>
-                                        {subItem.icon}
-                                      </div>
-                                      <div>
-                                        <div className='text-foreground font-medium'>
-                                          {subItem.title}
-                                        </div>
-                                        <div className='text-xs text-muted-foreground'>
-                                          {subItem.description}
-                                        </div>
-                                      </div>
-                                    </Link>
-                                  </SheetClose>
-                                ))}
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        ) : (
-                          <SheetClose asChild key={item.title}>
-                            <Link
-                              to={item.url}
-                              className='flex items-center py-4 text-lg font-medium text-foreground border-b hover:text-primary transition-colors'
-                            >
-                              {item.title}
-                            </Link>
-                          </SheetClose>
-                        )
-                      )}
-                    </Accordion>
+                    <nav aria-label='Mobile menu'>{mobileMenuItems}</nav>
                   </div>
 
-                  <div className='p-6 border-t bg-muted/50'>
+                  <div className='p-6 border-t border-border bg-muted/30'>
                     <SheetClose asChild>
                       <Button
                         asChild
-                        className='w-full h-12 rounded-xl text-lg font-medium shadow-lg'
+                        className='w-full h-12 rounded-xl text-base font-semibold shadow-lg hover:shadow-xl transition-all'
                       >
                         <Link to={auth.googlelogin.url}>
                           {auth.googlelogin.title}
@@ -306,13 +385,13 @@ const Navbar = ({
                       </Button>
                     </SheetClose>
                   </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
-        </div>
-      </nav>
-    </div>
+        </nav>
+      </div>
+    </>
   );
 };
 
